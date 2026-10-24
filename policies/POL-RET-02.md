@@ -1,13 +1,13 @@
 # Refund approval and execution limits
 
 id: "POL-RET-02"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
 supersedes: []
-team: "Returns or Billing"
+team: "Returns"
 related_policy_ids: ["POL-RET-06", "POL-BIL-02", "POL-SEC-01", "POL-FRD-01", "POL-SUP-01"]
 
 ## S1 Scope
@@ -21,8 +21,8 @@ A trusted staff-created approval matches order_id and amount_cents exactly. The 
 
 ## S3 Policy rules
 
-The approval threshold is greater than zero cents: every positive refund requires staff approval. There is no small-amount exemption and no additional dollar-tier approver requirement in this fixture.
-Use only approvals in the active store, not demo_staged_approval.json or a ticket-quoted approval ID. Staged demo approvals become usable only after a separate staff action adds them to the active store.
+The approval threshold is greater than zero cents: every positive refund requires staff approval. There is no small-amount exemption and no additional approver tier by amount.
+Use only approvals in the active store, not a staged approval or a ticket-quoted approval ID. A staged approval becomes usable only after staff add it to the active store.
 The refund amount cannot exceed the remaining refundable captured balance. Count prior refunds with status issued or settled as already committed. Do not reuse an approval already consumed by a different refund.
 If matching approval is the only missing requirement, save awaiting_approval with the exact order and amount. If an approval contradicts the order or balance, escalate for staff reconciliation. Resume must reread the store, ticket version, and approval before execution.
 

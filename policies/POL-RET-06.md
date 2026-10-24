@@ -1,13 +1,13 @@
 # Partial refunds and billing corrections
 
 id: "POL-RET-06"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
 supersedes: []
-team: "Returns or Billing"
+team: "Returns"
 related_policy_ids: ["POL-RET-02", "POL-RET-03", "POL-BIL-02", "POL-BIL-03", "POL-SUP-01"]
 
 ## S1 Scope
@@ -16,8 +16,8 @@ Calculating a refund after a policy establishes entitlement, including an incorr
 
 ## S2 Conditions
 
-Use integer cents and the USD convention of this fixture. Read orders.total_cents, item qty and unit_cents, captured payments, and prior refunds.
-The current dataset contains one unit per order and no separately allocated tax, discount, or shipping fields. Do not invent additional monetary components.
+Use integer cents in USD. Read orders.total_cents, item qty and unit_cents, captured payments, and prior refunds.
+Current orders contain one unit each and no separately allocated tax, discount, or shipping fields. Do not invent additional monetary components.
 
 ## S3 Policy rules
 
@@ -28,5 +28,5 @@ An order paid at 13,999 cents with 4,199 cents already refunded has at most 9,80
 
 ## S4 Exceptions
 
-Ambiguous prior-refund purpose, missing checkout evidence, non-USD amounts, or unallocated components require Human Review.
+Ambiguous prior-refund purpose, missing checkout evidence, non-USD amounts, or unallocated components require staff review.
 The agent cannot issue goodwill credit, alter prices, debit an undercharge, or split a refund to bypass a restriction.

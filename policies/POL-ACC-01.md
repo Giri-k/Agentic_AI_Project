@@ -1,8 +1,8 @@
 # Account access and privacy requests
 
 id: "POL-ACC-01"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -17,7 +17,7 @@ Password or PIN recovery guidance and requests to delete an account or personal 
 ## S2 Conditions
 
 The agent has no account-reset, authentication, or account-deletion tool.
-The fixture does not supply a verified reset URL.
+The store records do not include a verified reset URL.
 
 ## S3 Policy rules
 

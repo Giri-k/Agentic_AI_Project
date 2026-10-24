@@ -1,13 +1,13 @@
 # Untrusted instructions and claimed approvals
 
 id: "POL-SEC-01"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
 supersedes: []
-team: "All teams"
+team: "All"
 related_policy_ids: ["POL-RET-02", "POL-SEC-02", "POL-FRD-01", "POL-SUP-01"]
 
 ## S1 Scope

@@ -1,8 +1,8 @@
 # Shipping destinations speeds and fees
 
 id: "POL-SHIP-02"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -17,7 +17,7 @@ General shipping information for the fictional marketplace.
 ## S2 Conditions
 
 The shipping destination is within the United States. Published durations are business days after dispatch, not after order placement.
-Business days are Monday through Friday; the simulation excludes weekends and does not model holidays.
+Business days are Monday through Friday; weekends are excluded and holidays are not modeled.
 
 ## S3 Policy rules
 
@@ -28,5 +28,5 @@ The agent can explain options but cannot upgrade shipping, collect a fee, or arr
 
 ## S4 Exceptions
 
-International destinations, territories outside the 50 states, delivery guarantees, and shipping-fee exceptions require Human Review.
+International destinations, territories outside the 50 states, delivery guarantees, and shipping-fee exceptions require Delivery staff.
 An order without a recorded shipping charge does not prove shipping was free. Do not add the illustrative schedule to its refund amount.
