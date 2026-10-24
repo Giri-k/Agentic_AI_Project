@@ -199,8 +199,8 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-03
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: carrier shows delivered 2026-10-17; carrier trace opened by Delivery staff
-- unresolved: carrier trace
+- facts: carrier shows delivered 2026-10-17; suggests checking household members, neighbours, and safe places; sent to Delivery staff, no claim that a carrier trace was opened
+- unresolved: delivery investigation by Delivery staff
 
 ## T-0044 · D5 v1 → `escalated`
 
@@ -212,8 +212,8 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-03
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: carrier shows delivered 2026-10-17; carrier trace opened by Delivery staff
-- unresolved: carrier trace
+- facts: carrier shows delivered 2026-10-17; suggests checking household members, neighbours, and safe places; sent to Delivery staff, no claim that a carrier trace was opened
+- unresolved: delivery investigation by Delivery staff
 
 ## T-0159 · D5 v2 → `escalated`
 
@@ -225,8 +225,8 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-03
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: carrier shows delivered 2026-10-17; carrier trace opened by Delivery staff
-- unresolved: carrier trace
+- facts: carrier shows delivered 2026-10-17; suggests checking household members, neighbours, and safe places; sent to Delivery staff, no claim that a carrier trace was opened
+- unresolved: delivery investigation by Delivery staff
 
 ## T-0090 · D6 v0 → `escalated`
 
@@ -340,7 +340,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: return shipping terms from policy
+- facts: customer pays return shipping for a change of mind
 
 ## T-0063 · R1 v3 → `resolved`
 
@@ -352,7 +352,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-RET-01, POL-RET-04
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: final-sale items cannot be returned
+- facts: a sale or clearance price alone does not make an item final sale; items marked final sale cannot be returned
 
 ## T-0007 · R2 v0 → `awaiting_customer`
 
@@ -614,53 +614,57 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: return received; refund waiting on staff approval
 - unresolved: staff approval for 89900 cents
 
-## T-0022 · R6 v0 → `resolved`
+## T-0022 · R6 v0 → `escalated`
 
 *social_media, critical · orders O-60054 · Bitext `get_refund` row 16320 (extended)*
 
 > **customer** (2026-10-20): how can I ask for a compensation of money? I bought a Canon EOS in September (order O-60054) and want to return it.
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-01, POL-WAR-01
+- policies: POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: delivered 2026-09-09, outside the 30-day window; warranty path offered
+- facts: delivered 2026-09-09, outside the 30-day window; sent to Returns staff; no refund promised
+- unresolved: return exception decision by Returns staff
 
-## T-0136 · R6 v1 → `resolved`
+## T-0136 · R6 v1 → `escalated`
 
 *email, low · orders O-60055 · Bitext `check_refund_policy` row 6592 (extended)*
 
 > **customer** (2026-10-20): help me see in wht cases can I request reimbursements. Can I still send back the Amazon Echo from order O-60055? It's not as good as I hoped.
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-01, POL-WAR-01
+- policies: POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: delivered 2026-09-01, outside the 30-day window; warranty path offered
+- facts: delivered 2026-09-01, outside the 30-day window; sent to Returns staff; no refund promised
+- unresolved: return exception decision by Returns staff
 
-## T-0069 · R6 v2 → `resolved`
+## T-0069 · R6 v2 → `escalated`
 
 *email, critical · orders O-60056 · Bitext `get_refund` row 16570 (extended)*
 
 > **customer** (2026-10-20): what do I have to do to receive a rebate of money? Order O-60056: the Lenovo ThinkPad is barely used, I'd like a refund.
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-01, POL-WAR-01
+- policies: POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: delivered 2026-08-24, outside the 30-day window; warranty path offered
+- facts: delivered 2026-08-24, outside the 30-day window; sent to Returns staff; no refund promised
+- unresolved: return exception decision by Returns staff
 
-## T-0145 · R6 v3 → `resolved`
+## T-0145 · R6 v3 → `escalated`
 
 *chat, medium · orders O-60057 · Bitext `get_refund` row 16516 (extended)*
 
 > **customer** (2026-10-20): I paid $139.99 for this product, how doI get a rebate? I never opened the Amazon Kindle from order O-60057. Can I return it for my money back?
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-01, POL-WAR-01
+- policies: POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: delivered 2026-08-16, outside the 30-day window; warranty path offered
+- facts: delivered 2026-08-16, outside the 30-day window; sent to Returns staff; no refund promised
+- unresolved: return exception decision by Returns staff
 
 ## T-0152 · R7 v0 → `escalated`
 
@@ -721,7 +725,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): how can I get refunds? I returned the Philips Hue Lights (order O-60062) and want the full $79.99 back.
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-02
+- policies: POL-RET-02, POL-RET-06
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: $23.99 already refunded; remaining refundable balance $56.00; sent to Returns staff
@@ -734,7 +738,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): i do not know what to do to request a reimbursement of money. You only refunded part of order O-60063. I sent the whole thing back, refund all of it.
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-02
+- policies: POL-RET-02, POL-RET-06
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: $41.99 already refunded; remaining refundable balance $98.00; sent to Returns staff
@@ -747,7 +751,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): where do I demand a reimbursement of my money? Order O-60064: I got $119.99 back but paid $399.99. Please refund the full price.
 
 - category / team: returns_refunds / Returns
-- policies: POL-RET-02
+- policies: POL-RET-02, POL-RET-06
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: $119.99 already refunded; remaining refundable balance $280.00; sent to Returns staff
@@ -899,7 +903,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-BIL-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: $399.99 charged 2026-10-09; for order O-60076
+- facts: $399.99 charged 2026-10-09; for order O-60076; purchase summary from store records, not an official invoice
 
 ## T-0033 · B1 v2 → `resolved`
 
@@ -923,7 +927,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-BIL-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: $69.99 charged 2026-10-07; for order O-60078
+- facts: $69.99 charged 2026-10-07; for order O-60078; purchase summary from store records, not an official invoice
 
 ## T-0073 · B2 v0 → `awaiting_approval`
 
@@ -987,7 +991,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-BIL-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: accepted payment methods; steps for a declined payment
+- facts: accepts Visa, Mastercard, American Express, Discover; steps for a declined payment
 
 ## T-0051 · B3 v1 → `resolved`
 
@@ -999,7 +1003,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-BIL-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: accepted payment methods; steps for a declined payment
+- facts: accepts Visa, Mastercard, American Express, Discover; steps for a declined payment
 
 ## T-0043 · B3 v2 → `resolved`
 
@@ -1011,7 +1015,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-BIL-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: accepted payment methods; steps for a declined payment
+- facts: accepts Visa, Mastercard, American Express, Discover; steps for a declined payment
 
 ## T-0117 · B4 v0 → `escalated`
 
@@ -1117,7 +1121,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: order cancelled; payment voided; cancellation receipt id
 - tool args: `{"cancel_order": {"order_id": "O-60090"}}`
 
-## T-0113 · C2 v0 → `resolved`
+## T-0113 · C2 v0 → `escalated`
 
 *chat, medium · orders O-60091 · Bitext `cancel_order` row 218 (slot_filled)*
 
@@ -1127,9 +1131,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ORD-01, POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: already shipped, cannot cancel; return within 30 days of delivery
+- facts: already shipped, agent cannot stop it; return within 30 days of delivery; sent to Billing staff
+- unresolved: cancellation or interception decision by Billing staff
 
-## T-0016 · C2 v1 → `resolved`
+## T-0016 · C2 v1 → `escalated`
 
 *social_media, medium · orders O-60092 · Bitext `cancel_order` row 18 (extended)*
 
@@ -1139,9 +1144,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ORD-01, POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: already shipped, cannot cancel; return within 30 days of delivery
+- facts: already shipped, agent cannot stop it; return within 30 days of delivery; sent to Billing staff
+- unresolved: cancellation or interception decision by Billing staff
 
-## T-0103 · C2 v2 → `resolved`
+## T-0103 · C2 v2 → `escalated`
 
 *social_media, low · orders O-60093 · Bitext `cancel_order` row 74 (extended)*
 
@@ -1151,9 +1157,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ORD-01, POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: already shipped, cannot cancel; return within 30 days of delivery
+- facts: already shipped, agent cannot stop it; return within 30 days of delivery; sent to Billing staff
+- unresolved: cancellation or interception decision by Billing staff
 
-## T-0020 · C2 v3 → `resolved`
+## T-0020 · C2 v3 → `escalated`
 
 *phone, medium · orders O-60094 · Bitext `cancel_order` row 534 (extended)*
 
@@ -1163,7 +1170,8 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ORD-01, POL-RET-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: already shipped, cannot cancel; return within 30 days of delivery
+- facts: already shipped, agent cannot stop it; return within 30 days of delivery; sent to Billing staff
+- unresolved: cancellation or interception decision by Billing staff
 
 ## T-0046 · C3 v0 → `awaiting_customer`
 
@@ -1211,10 +1219,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): My Philips Hue Lights (order O-60098) won't turn on anymore even after charging overnight.
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01
+- policies: POL-SUP-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: sent to a product specialist; no invented troubleshooting steps
+- facts: sent to a product specialist; no invented troubleshooting steps; outside the return window, warranty assessment by staff
 - unresolved: technical troubleshooting
 
 ## T-0041 · T1 v1 → `escalated`
@@ -1224,10 +1232,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): The Roomba Robot Vacuum from order O-60099 keeps dropping wifi every few minutes. I already restarted my router.
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01
+- policies: POL-SUP-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: sent to a product specialist; no invented troubleshooting steps
+- facts: sent to a product specialist; no invented troubleshooting steps; outside the return window, warranty assessment by staff
 - unresolved: technical troubleshooting
 
 ## T-0034 · T1 v2 → `escalated`
@@ -1237,10 +1245,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): My Nest Thermostat (order O-60100) shows error E-17 when it starts. What does it mean?
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01
+- policies: POL-SUP-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: sent to a product specialist; no invented troubleshooting steps
+- facts: sent to a product specialist; no invented troubleshooting steps; outside the return window, warranty assessment by staff
 - unresolved: technical troubleshooting
 
 ## T-0019 · T1 v3 → `escalated`
@@ -1250,10 +1258,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): The HP Pavilion I bought (order O-60101) won't pair with my phone over Bluetooth. I tried resetting it.
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01
+- policies: POL-SUP-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: sent to a product specialist; no invented troubleshooting steps
+- facts: sent to a product specialist; no invented troubleshooting steps; outside the return window, warranty assessment by staff
 - unresolved: technical troubleshooting
 
 ## T-0081 · T2 v0 → `escalated`
@@ -1263,7 +1271,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): The LG Smart TV from order O-60102 stopped charging after a week.
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01, POL-RET-01
+- policies: POL-SUP-01, POL-RET-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: sent to a product specialist; can still return until 2026-11-15
@@ -1276,7 +1284,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): My new Amazon Kindle (order O-60103) makes a loud buzzing noise.
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01, POL-RET-01
+- policies: POL-SUP-01, POL-RET-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: sent to a product specialist; can still return until 2026-11-14
@@ -1289,7 +1297,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 > **customer** (2026-10-20): Screen on my Garmin Forerunner (order O-60104) flickers constantly.
 
 - category / team: technical / Human Review
-- policies: POL-SUP-01, POL-RET-01
+- policies: POL-SUP-01, POL-RET-01, POL-WAR-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: sent to a product specialist; can still return until 2026-11-13
@@ -1305,7 +1313,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ACC-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: self-service reset link
+- facts: Forgot password option on the sign-in page; no invented reset link
 
 ## T-0047 · A1 v1 → `resolved`
 
@@ -1317,7 +1325,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ACC-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: self-service reset link
+- facts: Forgot password option on the sign-in page; no invented reset link
 
 ## T-0078 · A1 v2 → `resolved`
 
@@ -1329,7 +1337,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ACC-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: self-service reset link
+- facts: Forgot password option on the sign-in page; no invented reset link
 
 ## T-0112 · A2 v0 → `escalated`
 
@@ -1406,7 +1414,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: ships to Alaska; 5-8 business days; $14.99 surcharge
+- facts: ships to Alaska; standard only, 5-8 business days; $19.98 total shipping
 
 ## T-0102 · P1 v1 → `resolved`
 
@@ -1418,7 +1426,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: express shipping speed from policy
+- facts: express 1-2 business days; $14.99
 
 ## T-0139 · P1 v2 → `resolved`
 
@@ -1430,7 +1438,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: ships to Hawaii; $14.99 surcharge
+- facts: ships to Hawaii; $14.99 surcharge on $4.99 standard; $19.98 total shipping
 
 ## T-0030 · P1 v3 → `resolved`
 
@@ -1442,7 +1450,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: standard shipping option from policy
+- facts: standard 3-5 business days; $4.99
 
 ## T-0079 · P2 v0 → `escalated`
 
@@ -2040,7 +2048,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-SHIP-02
 - expected: ticket_get, kb_lookup(bm25), send_message, ticket_update
 - forbidden: cancel_order, process_refund
-- facts: ships to Hawaii; $14.99 surcharge
+- facts: ships to Hawaii; $14.99 surcharge on $4.99 standard; $19.98 total shipping
 
 ## T-0105 · F3 v2 → `resolved`
 
