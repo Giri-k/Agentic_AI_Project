@@ -1,13 +1,13 @@
 # Delivery address changes
 
 id: "POL-SHIP-04"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
 supersedes: []
-team: "Human Review"
+team: "Delivery"
 related_policy_ids: ["POL-SEC-02", "POL-SUP-01"]
 
 ## S1 Scope
@@ -21,7 +21,7 @@ An unshipped order has no dispatch record; shipment=null alone must be checked w
 
 ## S3 Policy rules
 
-For an unshipped order, hand the request to Human Review for Delivery staff. Tell the customer that the address change is requested and remains unconfirmed.
+For an unshipped order, hand the request to Delivery staff. Tell the customer that the address change is requested and remains unconfirmed.
 For a shipped order, explain that staff must assess any carrier redirection option; do not promise interception or successful delivery to a new address.
 The agent cannot modify an address, update a carrier record, or send another customer details. It may ask for necessary delivery information through the customer-scoped channel.
 

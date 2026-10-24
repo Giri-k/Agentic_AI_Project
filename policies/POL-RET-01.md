@@ -1,8 +1,8 @@
 # Standard returns and gift returns
 
 id: "POL-RET-01"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -29,4 +29,4 @@ Gift recipients may return items for store credit within 30 days, including item
 ## S4 Exceptions
 
 Ordinary final-sale returns are excluded under POL-RET-04. The gift-return clause expressly includes final-sale items; if that policy disagrees, follow the conflict process in POL-SUP-01.
-Outside-window requests, missing condition evidence, and requests for exceptions require Human Review. A defect may have a separate damage or warranty path.
+For a change-of-mind request after day 30, explain that the return window has passed and escalate any exception request to Returns staff; do not decline it as final. Missing condition evidence also goes to Returns staff. A defect may have a separate damage or warranty path.

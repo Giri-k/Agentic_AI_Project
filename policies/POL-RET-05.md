@@ -1,8 +1,8 @@
 # Damaged or incorrect items
 
 id: "POL-RET-05"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -23,10 +23,10 @@ Staff approval for the specific damage or wrong-item remedy is required. A repor
 
 Qualifying damaged or incorrect items are eligible for a refund or replacement after staff approval, including final-sale items. Customers do not pay return shipping for this remedy.
 When the order and report are consistent and only staff authorization for an exact refund remains, use awaiting_approval. Staff approval must record the damage or wrong-item basis; a generic approval unrelated to this claim is insufficient.
-The staff-approved remedy may waive a physical return. The agent can execute only a supported refund with an exact matching approval; replacement shipments and return labels require Human Review.
+The staff-approved remedy may waive a physical return. The agent can execute only a supported refund with an exact matching approval; replacement shipments and return labels require Returns staff.
 Ask for missing item or damage details. Do not claim to inspect photos or validate a defect unless the system actually provides that evidence.
 
 ## S4 Exceptions
 
 If the item is final sale, retrieve POL-RET-04 too. Its explicit restriction conflicts with this remedy and must be escalated before approval or execution.
-Customer-caused damage, safety concerns, unclear amounts, and defects arising after the return window require Human Review or the warranty path.
+Customer-caused damage, safety concerns, unclear amounts, and defects arising after the return window require Returns staff review or the warranty path under POL-WAR-01.

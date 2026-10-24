@@ -1,8 +1,8 @@
 # Final sale restrictions
 
 id: "POL-RET-04"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -17,7 +17,7 @@ Physical products whose order item record has final_sale=true.
 ## S2 Conditions
 
 Use the explicit final_sale flag or verified purchase terms. A reduced price alone does not establish final-sale status.
-For this fixture, an omitted final_sale flag means the item is not marked final sale.
+An omitted final_sale flag means the item is not marked final sale.
 
 ## S3 Policy rules
 

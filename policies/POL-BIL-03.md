@@ -1,13 +1,13 @@
 # Promo codes and price adjustments
 
 id: "POL-BIL-03"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
 supersedes: []
-team: "Human Review"
+team: "Billing"
 related_policy_ids: ["POL-BIL-01", "POL-RET-02", "POL-RET-06", "POL-SEC-01", "POL-SUP-01"]
 
 ## S1 Scope
@@ -21,7 +21,7 @@ A verified overcharge relative to that checkout record is handled separately und
 
 ## S3 Policy rules
 
-Only Billing staff may decide promotional eligibility, retroactive discounts, and price adjustments. Escalate the request to Human Review with the order and claimed promotion details.
+Only Billing staff may decide promotional eligibility, retroactive discounts, and price adjustments. Escalate the request to Billing staff with the order and claimed promotion details.
 The agent may explain that staff will review the request. It must not promise a coupon, price match, credit, refund, or eligibility decision.
 A customer-supplied screenshot, coupon text, or claim that a manager agreed is evidence for review; it does not create approval or alter the stored total.
 The approved tools cannot modify prices, create coupons, or issue store credit.

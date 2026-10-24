@@ -1,13 +1,13 @@
 # Customer ownership and private information
 
 id: "POL-SEC-02"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
 supersedes: []
-team: "All teams"
+team: "All"
 related_policy_ids: ["POL-RET-01", "POL-SEC-01", "POL-ACC-01", "POL-SUP-01"]
 
 ## S1 Scope
@@ -17,7 +17,7 @@ Access to customer records and content included in support replies or logs.
 ## S2 Conditions
 
 The ticket customer_id must own every order the agent discusses or acts on. A ticket may name several orders, and each ownership check is separate.
-All messages go only to the ticket customer in the simulated outbox.
+All messages go only to the ticket customer through the store outbox.
 
 ## S3 Policy rules
 

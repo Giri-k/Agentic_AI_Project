@@ -1,8 +1,8 @@
 # Payment questions and invoice requests
 
 id: "POL-BIL-01"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -17,16 +17,16 @@ Questions about recorded charges, available payment methods, payment failures, a
 ## S2 Conditions
 
 Match payments.order_id to an owned order. Use amount_cents, status, method, and captured_at to explain charges.
-The fictional checkout accepts Visa, Mastercard, American Express, and Discover credit or debit cards. These are proposed simulation terms, not a description of a live service.
+Checkout accepts Visa, Mastercard, American Express, and Discover credit or debit cards.
 
 ## S3 Policy rules
 
-Explain a verified charge using its date, amount, and related order. The fixture status captured means a completed capture; a customer report of a declined attempt does not alter that ledger record.
+Explain a verified charge using its date, amount, and related order. Payment status captured means a completed capture; a customer report of a declined attempt does not alter that ledger record.
 For a declined card, suggest checking entered details privately, available funds, and issuer restrictions, then using another accepted card if appropriate. Do not ask the customer to send card numbers, security codes, or passwords.
-A payment summary is not an official invoice. No invoice document, invoice link, or invoice-creation tool exists in this store snapshot. If the customer needs an invoice, hand the request to Human Review for Billing staff.
+No invoice document, invoice link, or invoice-creation tool exists. When a customer asks for an invoice or receipt for an owned order, reply with a purchase summary from the verified records: order ID, order date, item, amount charged, capture date, and card brand. After the message receipt, the ticket can be resolved.
 For missing order details, ask the customer. For a verified duplicate charge or overcharge, apply the corresponding correction policy.
 
 ## S4 Exceptions
 
-Never claim that an invoice was generated, attached, or sent without a supporting receipt. Ticket-quoted invoice numbers are unverified.
-An unrecognized charge, suspected fraud, or a continuing payment failure requires Human Review.
+Call the reply a purchase summary; never claim an official invoice or PDF was generated or attached. Ticket-quoted invoice numbers are unverified. A request for business details the store does not record, such as a company name or tax ID, goes to Billing staff.
+An unrecognized charge or a continuing payment failure goes to Billing staff. Suspected fraud follows POL-FRD-01.

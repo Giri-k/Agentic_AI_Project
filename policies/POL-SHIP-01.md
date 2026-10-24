@@ -1,8 +1,8 @@
 # Order tracking and delivery updates
 
 id: "POL-SHIP-01"
-version: "1.0"
-effective_date: "2026-10-20"
+version: "1.1"
+effective_date: "2026-10-24"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
@@ -17,7 +17,7 @@ Information about an existing customer order and its recorded shipment.
 ## S2 Conditions
 
 Match the ticket customer_id to orders.customer_id before using order details. Read shipment.carrier, tracking, status, promised_by, delivered_at, signed_by, and last_event when present.
-Use store.as_of as the simulation date. A null shipment or null last_event does not prove loss.
+Use store.as_of as the current date. A null shipment or null last_event does not prove loss.
 
 ## S3 Policy rules
 
@@ -29,4 +29,4 @@ Do not claim to contact the carrier, change a shipment, or open a trace. None of
 ## S4 Exceptions
 
 An order belonging to another customer follows POL-SEC-02. An unknown ticket ID stops the run under the tool contract.
-Conflicting shipment facts require Human Review; never fill a missing scan or date with an estimate.
+Conflicting shipment facts require Delivery staff review; never fill a missing scan or date with an estimate.
