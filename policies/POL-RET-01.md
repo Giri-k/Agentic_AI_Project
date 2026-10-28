@@ -2,7 +2,7 @@
 
 id: "POL-RET-01"
 version: "1.1"
-effective_date: "2026-10-24"
+effective_date: "2026-10-20"
 status: "active_in_simulation"
 owner: "OP US Marketplace Support Operations"
 authority: "store_policy"
