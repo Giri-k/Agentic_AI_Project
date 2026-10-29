@@ -1,0 +1,18 @@
+[project]
+name = "opus-agent"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "openai>=3.41.0",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
