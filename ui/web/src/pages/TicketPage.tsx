@@ -298,7 +298,7 @@ function Conversation({ detail }: { detail: TicketDetail }) {
             <p>
               The recorded conversation is ready to review.
               <br />
-              Run the mock agent to add a simulated reply and its receipt.
+              Run the agent to add a reply and its receipt.
             </p>
           </div>
         )}
@@ -606,7 +606,7 @@ export function TicketPage() {
             <ShieldCheck size={12} />
             {health.data?.adapter === "mock"
               ? "Scripted simulation"
-              : "Adapter execution"}
+              : "Real agent"}
           </span>
           <button
             className="button button-secondary"
@@ -619,7 +619,7 @@ export function TicketPage() {
               requestedScenario !== "standard"
                 ? "Select standard mode to compare the baseline; forced scenarios are scripted agent tests."
                 : canRun
-                  ? "Run one retrieval and one simulated model call"
+                  ? "Run one retrieval and one model call"
                   : (blockingReason ??
                     "Reset the workspace for a fresh comparison")
             }
@@ -660,7 +660,9 @@ export function TicketPage() {
             }}
             title={
               canRun
-                ? "Start a scripted mock run"
+                ? health.data?.adapter === "real"
+                  ? "Start a real agent run (calls the model)"
+                  : "Start a scripted mock run"
                 : (blockingReason ?? "Reset the workspace to start a fresh run")
             }
           >

@@ -77,6 +77,8 @@ class Dispatcher:
         if retriever is not None and injected.get("service") == "embeddings":
             # simulated outage: kb_lookup must fall back to BM25
             retriever.embedding_outages = -1 if injected["fail_times"] == "all" else injected["fail_times"]
+        elif hasattr(retriever, "embedding_outages"):
+            retriever.embedding_outages = 0  # a shared retriever must not carry another ticket's outage
         self._n = 0
 
     def tools_for_model(self):
