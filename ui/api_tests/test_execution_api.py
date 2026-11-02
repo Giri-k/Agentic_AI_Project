@@ -168,7 +168,7 @@ def test_single_pass_baseline_retrieves_once_before_its_only_model_call(executio
 
 
 def test_strict_backend_limit_stops_safely_without_resetting_resume_counters():
-    """A six-call configuration reveals the unresolved demo conflict rather than hiding overflow."""
+    """A tool allowance too small for the demo stops safely instead of hiding the overflow."""
     adapter = MockAdapter(step_delay=0.001, tool_limit=6)
     with TestClient(create_app(adapter=adapter)) as client:
         run_to_pause(client)

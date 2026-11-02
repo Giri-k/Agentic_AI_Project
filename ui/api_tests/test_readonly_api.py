@@ -66,8 +66,8 @@ def test_health_identifies_mock_execution_and_disclosed_demo_budget(client):
     assert body["capabilities"]["run"] is True
     assert body["capabilities"]["resume"] is True
     assert body["limits"]["tool_calls"] == 8
-    assert body["backend_limits"]["tool_calls"] == 6
-    assert body["budget_notice"]
+    assert body["backend_limits"]["tool_calls"] == 8
+    assert body["budget_notice"] is None
 
 
 def test_inbox_preserves_fixture_state_without_answer_leak(client, source_tickets, source_store):

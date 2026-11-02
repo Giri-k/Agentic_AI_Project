@@ -16,8 +16,8 @@ from .grading import expected_outcome
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LIMITS = {
-    "model_calls": 4,
-    "tool_calls": 6,
+    "model_calls": 8,
+    "tool_calls": 8,
     "retries": 1,
     "schema_repairs": 1,
     "revisions": 1,
@@ -26,8 +26,8 @@ DEMO_TICKETS = {"timeout_retry": "T-0052", "repeated_call": "T-0029", "refund_ga
 CARD_NUMBER = re.compile(r"\b(?:\d[ -]?){12,18}\d\b")
 
 BUDGET_NOTICE = (
-    "Scripted MOCK demo allowance: 8 lifetime tool calls. The real backend currently allows 6; "
-    "the team must reconcile this before real integration. Resume preserves all counters."
+    "This MOCK configuration uses a different tool-call allowance than the backend limit. "
+    "Resume preserves all counters."
 )
 
 

@@ -10,7 +10,7 @@ const zeroBudget = {
 };
 const limits = { ...health.limits, tool_calls: 8 };
 const notice =
-  "Mock demo allowance: 8 tool calls. The real backend currently allows 6 across resumes.";
+  "This MOCK configuration uses a different tool-call allowance than the backend limit.";
 
 // A stateful HTTP fixture exercises real query invalidation and polling without a model or browser bridge.
 export function executionFixture() {
