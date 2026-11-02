@@ -5,7 +5,7 @@ from typing import Protocol
 from openai import OpenAI
 from pydantic import BaseModel
 
-from .config import CHAT_MODEL, EMBED_MODEL, PORTKEY_BASE_URL
+from .config import CHAT_MODEL, EMBED_MODEL, MODEL_TIMEOUT_S, PORTKEY_BASE_URL
 
 
 @lru_cache(maxsize=1)
@@ -14,7 +14,7 @@ def client():
     key = os.getenv("PORTKEY_API_KEY")
     if not key:
         raise RuntimeError("PORTKEY_API_KEY is not set; add it to .env in the repo root")
-    return OpenAI(api_key=key, base_url=PORTKEY_BASE_URL)
+    return OpenAI(api_key=key, base_url=PORTKEY_BASE_URL, timeout=MODEL_TIMEOUT_S, max_retries=1)
 
 
 _shared_client = client  # OpenAILLM's `client` argument shadows the function name
