@@ -44,7 +44,7 @@ All current dashboard figures are marked **MOCK DATA**, with `measured: false` a
 
 Approving twice is harmless. Repeated resume or run requests cannot issue a second refund. Only one run can execute at a time; approval and reset are blocked while it is active. Customer-input and staff-recovery resume paths show their outstanding requirement instead of pretending it is satisfied.
 
-**Mock budget disclosure:** the scripted agent demo needs four tool calls before pause and four after resume. Mock mode therefore explicitly advertises an **eight-call allowance**, while separately showing the unchanged backend reference limit of **six**. Counters remain cumulative across resume. This is a UI demonstration allowance, not evidence that the real backend satisfies the demo contract. Strict six-call mock tests stop safely and retain any existing action receipts.
+**Budget:** the scripted agent demo needs four tool calls before the pause and four after resume. The backend limits are **8 model calls and 8 tool calls per ticket**, counted across resume, and the mock uses the same limits. A mock configured with a smaller allowance shows a budget notice and stops safely, keeping any existing action receipts.
 
 Run each system from a fresh reset when comparing agent and baseline. A ticket can start only once per snapshot. Baseline uses one retrieval before one scripted model call per invocation and no retries. Resuming its refund example adds a retrieval, so it needs nine lifetime tool calls and stops safely at the default eight-call mock allowance.
 
@@ -147,6 +147,6 @@ icons are bundled locally; the browser does not contact an external asset servic
 
 ## Next integration work
 
-The UI is implemented through the evaluation page and polished against `MockAdapter`. The next development step is `RealAdapter` integration, followed by testing against actual agent output and a presentation rehearsal. Before integration, reconcile the **eight-call demo versus six-call backend limit** with the agent team. Limits and cumulative progress are supplied by adapter metadata/events rather than inferred from visible rows.
+The UI is implemented through the evaluation page and polished against `MockAdapter`. The next development step is `RealAdapter` integration, followed by testing against actual agent output and a presentation rehearsal. Limits and cumulative progress are supplied by adapter metadata/events rather than inferred from visible rows.
 
 The agent team owns real execution, approvals, checkpoints and `RealAdapter`. UI work stays in `ui/`; coordinate changes to the shared `pyproject.toml` and `uv.lock`. Keep expected labels separate from real agent inputs and identify any future fabricated evaluation results as mock data.

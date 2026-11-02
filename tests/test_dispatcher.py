@@ -42,7 +42,7 @@ def test_same_arguments_in_another_key_order_count_as_identical(store):
         d.call("ticket_get", '{ "ticket_id" : "T-0039" }')
 
 
-def test_tool_budget_stops_the_seventh_real_call(store):
+def test_tool_budget_stops_the_call_after_the_limit(store):
     d = Dispatcher(store, "T-0039")
     for i in range(MAX_TOOL_CALLS):
         d.call("send_message", args(ticket_id="T-0039", body=f"update {i}", citations=["POL-RET-02"]))
