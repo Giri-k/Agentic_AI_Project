@@ -73,6 +73,10 @@ class Dispatcher:
         self.customer_id = store.tickets[ticket_id]["customer_id"]
         self.budget = budget or Budget.for_ticket(store, ticket_id)
         self.trace, self.retriever = trace, retriever
+        injected = store.failure_injection(ticket_id) or {}
+        if retriever is not None and injected.get("service") == "embeddings":
+            # simulated outage: kb_lookup must fall back to BM25
+            retriever.embedding_outages = -1 if injected["fail_times"] == "all" else injected["fail_times"]
         self._n = 0
 
     def tools_for_model(self):
