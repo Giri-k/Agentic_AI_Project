@@ -1,15 +1,29 @@
-"""Thin model wrapper so agents and tests share one interface.
-
-The baseline (and later the agent) only ever calls `llm.parse(messages, schema)`.
-Tests pass a fake; production uses OpenAILLM. Point it at Portkey (or any
-OpenAI-compatible gateway) with OPENAI_BASE_URL in .env; never log API keys.
-"""
-
+import os
+from functools import lru_cache
 from typing import Protocol
 
+from openai import OpenAI
 from pydantic import BaseModel
 
-from .config import CHAT_MODEL
+from .config import CHAT_MODEL, EMBED_MODEL, PORTKEY_BASE_URL
+
+
+@lru_cache(maxsize=1)
+def client():
+    """One shared OpenAI client pointed at Portkey."""
+    key = os.getenv("PORTKEY_API_KEY")
+    if not key:
+        raise RuntimeError("PORTKEY_API_KEY is not set; add it to .env in the repo root")
+    return OpenAI(api_key=key, base_url=PORTKEY_BASE_URL)
+
+
+_shared_client = client  # OpenAILLM's `client` argument shadows the function name
+
+
+def embed(texts):
+    """Embed a list of texts in one request; returns one 1,536-number vector per text, in order."""
+    response = client().embeddings.create(model=EMBED_MODEL, input=list(texts))
+    return [item.embedding for item in sorted(response.data, key=lambda d: d.index)]
 
 
 class LLM(Protocol):
@@ -19,17 +33,11 @@ class LLM(Protocol):
 
 
 class OpenAILLM:
-    """OpenAI structured-output client. Reads OPENAI_API_KEY and optional OPENAI_BASE_URL from the environment."""
+    """Structured-output chat client. Uses the shared Portkey client unless a client is passed in."""
 
     def __init__(self, model=CHAT_MODEL, client=None):
-        from dotenv import load_dotenv
-
-        load_dotenv()
-        if client is None:
-            from openai import OpenAI
-
-            client = OpenAI()  # picks up OPENAI_API_KEY / OPENAI_BASE_URL itself
-        self.client, self.model, self.last_usage = client, model, None
+        self.client = client if client is not None else _shared_client()
+        self.model, self.last_usage = model, None
 
     def parse(self, messages, schema):
         """One model call. Raises ValueError on a refusal or an empty parse, so callers can fail safe."""
