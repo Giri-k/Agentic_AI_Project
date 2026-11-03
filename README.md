@@ -98,6 +98,7 @@ agent/
   agent.py           the agent loop: classify, act step by step, check the reply, pause/resume
   baseline.py        single pass: one retrieval, one model call
   eval_run.py        runs the agent and the baseline on a split and scores them against the labels
+  judge.py           LLM judge: does each sent reply state the label's expected facts, without unsupported claims
   eval_retrieval.py  Hit@3 / Recall@3 / Precision@3 / MRR for retrieval
   trace.py           JSONL traces, card numbers removed
   staff.py           human staff actions: reset, approve, status
@@ -195,9 +196,13 @@ uv run pytest
 # 4. Measure retrieval (uses the key); --save shows the result in the console
 uv run python -m agent.eval_retrieval --split test --save
 
-# 5. Evaluate the agent and the baseline on the test split (uses the key, ~20 min)
-uv run python -m agent.eval_run --split test           # rerun to finish an interrupted run
-uv run python -m agent.eval_run --limit 3 --tag smoke  # quick check on 3 tickets
+# 5. Evaluate the agent and the baseline (uses the key); rerun the same command to finish an interrupted run
+uv run python -m agent.eval_run --split dev --tag v2                         # 44 dev tickets
+uv run python -m agent.eval_run --split test --tag v2                        # 115 test tickets
+uv run python -m agent.eval_run --split dev --tag v2-high --reasoning-effort high
+uv run python -m agent.eval_run --split test --tag v2 --rescore              # re-score saved runs, no model calls
+uv run python -m agent.judge --runs agent-test-v2,baseline-test-v2           # judge what the replies say
+uv run python -m agent.judge --spotcheck agent-test-v2,baseline-test-v2      # 20 verdicts to check by hand
 
 # 6. Staff actions used in the demo
 uv run python -m agent.staff reset              # fresh working store in runtime/

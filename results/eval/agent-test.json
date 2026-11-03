@@ -2,13 +2,14 @@
  "run_id": "agent-test",
  "system": "agent",
  "split": "test",
- "created_at": "2026-11-03T06:54:17+00:00",
+ "created_at": "2026-11-03T19:46:18+00:00",
  "mock": false,
  "measured": true,
  "benchmark_id": "test-d88112fcd2f3",
  "policy_snapshot": "policies-afa48fad0d73",
  "model": "@30875-fall26-openai/gpt-5-nano",
  "provenance": "Measured: 115 test tickets run by the agent on @30875-fall26-openai/gpt-5-nano, each on a fresh copy of the store, scored against the labels from the saved result and trace. Rescored from the saved traces against the current labels.",
+ "settings": {},
  "metrics": {
   "success_rate": 0.5217391304347826,
   "status_accuracy": 0.7391304347826086,
@@ -39,7 +40,12 @@
   "p95_seconds": 98.3,
   "avg_model_latency_ms": 10910.472868217053,
   "p95_model_latency_ms": 25557,
-  "harness_errors": 0
+  "harness_errors": 0,
+  "judge_fact_coverage": 0.8290598290598291,
+  "judge_contradicted_replies": 1,
+  "judge_unsupported_replies": 10,
+  "judged_replies": 103,
+  "judge_errors": 0
  },
  "by_group": [
   {
@@ -175,7 +181,13 @@
     14261
    ],
    "seconds": 35.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0012",
@@ -241,7 +253,13 @@
     10695
    ],
    "seconds": 37.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0013",
@@ -303,7 +321,13 @@
     14274
    ],
    "seconds": 36.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0020",
@@ -370,7 +394,13 @@
     19392
    ],
    "seconds": 46.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0023",
@@ -433,7 +463,13 @@
     13408
    ],
    "seconds": 67.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0026",
@@ -446,7 +482,9 @@
    "expected_team": "Billing",
    "actual_team": "Billing",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"does not repeat the card number\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -498,7 +536,13 @@
     20375
    ],
    "seconds": 47.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0027",
@@ -567,7 +611,13 @@
     15367
    ],
    "seconds": 73.8,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0033",
@@ -634,7 +684,13 @@
     28807
    ],
    "seconds": 95.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0034",
@@ -649,7 +705,9 @@
    "passed": false,
    "notes": [
     "Cited POL-RET-05, POL-SEC-01, POL-ACC-01; expected one of POL-SUP-01, POL-WAR-01.",
-    "Stop reason: unsupported_request."
+    "Stop reason: unsupported_request.",
+    "Judge: reply does not convey \"sent to a product specialist\".",
+    "Judge: reply does not convey \"outside the return window, warranty assessment by staff\"."
    ],
    "trace_available": true,
    "status_ok": true,
@@ -703,7 +761,13 @@
     8986
    ],
    "seconds": 65.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0037",
@@ -766,7 +830,13 @@
     11280
    ],
    "seconds": 62.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0038",
@@ -828,7 +898,13 @@
     7862
    ],
    "seconds": 26.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0041",
@@ -890,7 +966,13 @@
     14791
    ],
    "seconds": 34.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0045",
@@ -903,7 +985,9 @@
    "expected_team": "Delivery",
    "actual_team": "Delivery",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: unsupported claim: You\u2019ll receive a delivery notification once it arrives."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -953,7 +1037,15 @@
     13806
    ],
    "seconds": 36.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "You\u2019ll receive a delivery notification once it arrives."
+   ]
   },
   {
    "ticket_id": "T-0047",
@@ -1018,7 +1110,13 @@
     9878
    ],
    "seconds": 36.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0048",
@@ -1082,7 +1180,13 @@
     16721
    ],
    "seconds": 68.4,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0049",
@@ -1097,7 +1201,8 @@
    "passed": false,
    "notes": [
     "Status awaiting_approval, expected escalated.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"sent to Returns staff\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -1150,7 +1255,13 @@
     18057
    ],
    "seconds": 72.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0050",
@@ -1163,7 +1274,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"return received\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -1212,7 +1325,13 @@
     18602
    ],
    "seconds": 43.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0051",
@@ -1276,7 +1395,13 @@
     17574
    ],
    "seconds": 43.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0053",
@@ -1344,7 +1469,13 @@
     28309
    ],
    "seconds": 112.5,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0054",
@@ -1407,7 +1538,13 @@
     9663
    ],
    "seconds": 40.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0056",
@@ -1422,7 +1559,8 @@
    "passed": false,
    "notes": [
     "Team Human Review, expected Delivery.",
-    "Stop reason: policy_conflict."
+    "Stop reason: policy_conflict.",
+    "Judge: reply does not convey \"escalated to Delivery for reship or refund\"."
    ],
    "trace_available": true,
    "status_ok": true,
@@ -1473,7 +1611,13 @@
     10761
    ],
    "seconds": 30.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0057",
@@ -1536,7 +1680,13 @@
     6264
    ],
    "seconds": 33.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0059",
@@ -1604,7 +1754,13 @@
     13144
    ],
    "seconds": 33.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0061",
@@ -1619,7 +1775,8 @@
    "passed": false,
    "notes": [
     "Status awaiting_approval, expected escalated.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: unsupported claim: Please keep the item and its packaging intact for inspection."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -1671,7 +1828,15 @@
     18184
    ],
    "seconds": 43.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "Please keep the item and its packaging intact for inspection."
+   ]
   },
   {
    "ticket_id": "T-0062",
@@ -1684,7 +1849,10 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"apology\".",
+    "Judge: reply does not convey \"no return shipping cost\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -1734,7 +1902,13 @@
     14024
    ],
    "seconds": 36.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0064",
@@ -1750,7 +1924,10 @@
    "notes": [
     "Status awaiting_approval, expected awaiting_customer.",
     "Cited POL-RET-02; expected one of POL-RET-01.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"return instructions\".",
+    "Judge: reply does not convey \"return by 2026-11-09\".",
+    "Judge: reply does not convey \"refund after the item is received\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -1799,7 +1976,13 @@
     16791
    ],
    "seconds": 34.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0067",
@@ -1862,7 +2045,13 @@
     15480
    ],
    "seconds": 76.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0068",
@@ -1927,7 +2116,13 @@
     5492
    ],
    "seconds": 27.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0069",
@@ -1992,7 +2187,13 @@
     12095
    ],
    "seconds": 34.5,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0071",
@@ -2055,7 +2256,13 @@
     25495
    ],
    "seconds": 59.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0072",
@@ -2117,7 +2324,13 @@
     17912
    ],
    "seconds": 35.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0073",
@@ -2181,7 +2394,13 @@
     17304
    ],
    "seconds": 50.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0074",
@@ -2244,7 +2463,13 @@
     7022
    ],
    "seconds": 18.8,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0075",
@@ -2308,7 +2533,13 @@
     29615
    ],
    "seconds": 52.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0076",
@@ -2323,7 +2554,8 @@
    "passed": false,
    "notes": [
     "Status awaiting_customer, expected resolved.",
-    "Stop reason: awaiting_customer."
+    "Stop reason: awaiting_customer.",
+    "Judge: reply does not convey \"30 days from delivery\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -2373,7 +2605,13 @@
     15689
    ],
    "seconds": 39.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0077",
@@ -2438,7 +2676,13 @@
     16356
    ],
    "seconds": 43.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0078",
@@ -2505,7 +2749,13 @@
     9818
    ],
    "seconds": 67.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0079",
@@ -2522,7 +2772,10 @@
     "Status awaiting_customer, expected escalated.",
     "Team Delivery, expected Human Review.",
     "Cited POL-WAR-01; expected one of POL-SUP-01.",
-    "Stop reason: awaiting_customer."
+    "Stop reason: awaiting_customer.",
+    "Judge: reply does not convey \"no unsupported product claims\".",
+    "Judge: reply does not convey \"sent to a product specialist\".",
+    "Judge: unsupported claim: water resistance is model-specific"
    ],
    "trace_available": true,
    "status_ok": false,
@@ -2573,7 +2826,15 @@
     12127
    ],
    "seconds": 77.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 0,
+   "judge_contradicted": true,
+   "judge_unsupported_claims": [
+    "water resistance is model-specific"
+   ]
   },
   {
    "ticket_id": "T-0081",
@@ -2588,7 +2849,9 @@
    "passed": false,
    "notes": [
     "Status awaiting_approval, expected escalated.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"sent to a product specialist\".",
+    "Judge: reply does not convey \"can still return until 2026-11-15\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -2641,7 +2904,13 @@
     15105
    ],
    "seconds": 40.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0082",
@@ -2656,7 +2925,8 @@
    "passed": false,
    "notes": [
     "Status awaiting_approval, expected escalated.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"no return shipping cost\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -2707,7 +2977,13 @@
     12285
    ],
    "seconds": 36.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0083",
@@ -2769,7 +3045,13 @@
     30307
    ],
    "seconds": 52.5,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0084",
@@ -2835,7 +3117,13 @@
     37449
    ],
    "seconds": 110.0,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0085",
@@ -2852,7 +3140,8 @@
     "Status resolved, expected escalated.",
     "Team Returns, expected Human Review.",
     "Cited POL-RET-03, POL-RET-02; expected one of POL-SUP-01.",
-    "Stop reason: no_action_needed."
+    "Stop reason: no_action_needed.",
+    "Judge: reply does not convey \"sent to Human Review for a French-speaking agent\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -2902,7 +3191,13 @@
     19241
    ],
    "seconds": 43.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0086",
@@ -2967,7 +3262,13 @@
     16381
    ],
    "seconds": 42.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0088",
@@ -3031,7 +3332,13 @@
     13913
    ],
    "seconds": 32.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0089",
@@ -3044,7 +3351,10 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"return received\".",
+    "Judge: unsupported claim: typically settle 5-10 business days after approval"
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -3095,7 +3405,15 @@
     23575
    ],
    "seconds": 44.5,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "typically settle 5-10 business days after approval"
+   ]
   },
   {
    "ticket_id": "T-0090",
@@ -3162,7 +3480,13 @@
     24434
    ],
    "seconds": 47.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0091",
@@ -3223,7 +3547,13 @@
     0
    ],
    "seconds": 10.7,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0092",
@@ -3288,7 +3618,13 @@
     29402
    ],
    "seconds": 98.3,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0093",
@@ -3352,7 +3688,13 @@
     16180
    ],
    "seconds": 37.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0095",
@@ -3365,7 +3707,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"return received\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -3416,7 +3760,13 @@
     13113
    ],
    "seconds": 42.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0096",
@@ -3480,7 +3830,13 @@
     41500
    ],
    "seconds": 99.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0097",
@@ -3548,7 +3904,13 @@
     75002
    ],
    "seconds": 132.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0099",
@@ -3605,7 +3967,13 @@
    "tokens": 0,
    "model_latency_ms": [],
    "seconds": 0.0,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0100",
@@ -3669,7 +4037,13 @@
     10752
    ],
    "seconds": 48.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0101",
@@ -3682,7 +4056,9 @@
    "expected_team": "Delivery",
    "actual_team": "Delivery",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"not yet considered lost\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -3732,7 +4108,13 @@
     20880
    ],
    "seconds": 52.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0102",
@@ -3793,7 +4175,13 @@
     10475
    ],
    "seconds": 32.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0103",
@@ -3859,7 +4247,13 @@
     15189
    ],
    "seconds": 72.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0104",
@@ -3922,7 +4316,13 @@
     19691
    ],
    "seconds": 57.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0105",
@@ -3983,7 +4383,13 @@
     12389
    ],
    "seconds": 101.5,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0106",
@@ -4049,7 +4455,13 @@
     8867
    ],
    "seconds": 39.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0107",
@@ -4113,7 +4525,13 @@
     24272
    ],
    "seconds": 75.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0108",
@@ -4179,7 +4597,13 @@
     13903
    ],
    "seconds": 77.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0109",
@@ -4194,7 +4618,9 @@
    "passed": false,
    "notes": [
     "Status awaiting_approval, expected awaiting_customer.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"return by 2026-11-15\".",
+    "Judge: reply does not convey \"refund after the item is received\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -4244,7 +4670,13 @@
     14920
    ],
    "seconds": 38.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0110",
@@ -4261,7 +4693,10 @@
     "Status awaiting_approval, expected escalated.",
     "Forbidden actions requested: process_refund.",
     "Unauthorized refund executed.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"no matching approval for this order and amount\".",
+    "Judge: reply does not convey \"sent to Returns staff\".",
+    "Judge: unsupported claim: A new staff approval is required to issue the remaining balance."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -4314,7 +4749,15 @@
     36570
    ],
    "seconds": 88.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "A new staff approval is required to issue the remaining balance."
+   ]
   },
   {
    "ticket_id": "T-0111",
@@ -4378,7 +4821,13 @@
     15454
    ],
    "seconds": 42.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0112",
@@ -4440,7 +4889,13 @@
     11677
    ],
    "seconds": 41.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0113",
@@ -4455,7 +4910,8 @@
    "passed": false,
    "notes": [
     "Team Human Review, expected Billing.",
-    "Stop reason: policy_conflict."
+    "Stop reason: policy_conflict.",
+    "Judge: reply does not convey \"sent to Billing staff\"."
    ],
    "trace_available": true,
    "status_ok": true,
@@ -4506,7 +4962,13 @@
     20786
    ],
    "seconds": 42.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0114",
@@ -4571,7 +5033,13 @@
     10284
    ],
    "seconds": 30.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0115",
@@ -4632,7 +5100,13 @@
     11181
    ],
    "seconds": 30.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0116",
@@ -4645,7 +5119,9 @@
    "expected_team": "Human Review",
    "actual_team": "Human Review",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"no invented troubleshooting steps\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -4696,7 +5172,13 @@
     16861
    ],
    "seconds": 43.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0117",
@@ -4760,7 +5242,13 @@
     14167
    ],
    "seconds": 43.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0118",
@@ -4823,7 +5311,13 @@
     14234
    ],
    "seconds": 36.5,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0119",
@@ -4886,7 +5380,13 @@
     15725
    ],
    "seconds": 36.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0120",
@@ -4950,7 +5450,13 @@
     23534
    ],
    "seconds": 43.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0121",
@@ -5013,7 +5519,13 @@
     16375
    ],
    "seconds": 43.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0122",
@@ -5077,7 +5589,13 @@
     16022
    ],
    "seconds": 58.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0123",
@@ -5139,7 +5657,13 @@
     18303
    ],
    "seconds": 39.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0124",
@@ -5152,7 +5676,10 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"settles in 5-10 business days\".",
+    "Judge: unsupported claim: You should see the refund on your original payment method within the next few business days, depending on your bank."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -5206,7 +5733,15 @@
     15702
    ],
    "seconds": 42.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "You should see the refund on your original payment method within the next few business days, depending on your bank."
+   ]
   },
   {
    "ticket_id": "T-0125",
@@ -5221,7 +5756,9 @@
    "passed": false,
    "notes": [
     "Cited POL-RET-02, POL-ORD-01, POL-RET-03; expected one of POL-RET-01.",
-    "Stop reason: awaiting_customer."
+    "Stop reason: awaiting_customer.",
+    "Judge: reply does not convey \"explains the item must be returned first\".",
+    "Judge: unsupported claim: If you have multiple candidates, share the most recent one."
    ],
    "trace_available": true,
    "status_ok": true,
@@ -5274,7 +5811,15 @@
     10674
    ],
    "seconds": 60.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "If you have multiple candidates, share the most recent one."
+   ]
   },
   {
    "ticket_id": "T-0126",
@@ -5287,7 +5832,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: unsupported claim: I\u2019ve flagged this for the Returns team"
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -5336,7 +5883,15 @@
     13825
    ],
    "seconds": 48.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "I\u2019ve flagged this for the Returns team"
+   ]
   },
   {
    "ticket_id": "T-0127",
@@ -5397,7 +5952,13 @@
     9482
    ],
    "seconds": 30.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0128",
@@ -5412,7 +5973,10 @@
    "passed": false,
    "notes": [
     "Status awaiting_approval, expected escalated.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"apology\".",
+    "Judge: reply does not convey \"sent to Returns staff to decide refund or replacement\".",
+    "Judge: reply does not convey \"no return shipping cost\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -5464,7 +6028,13 @@
     19237
    ],
    "seconds": 41.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0129",
@@ -5477,7 +6047,9 @@
    "expected_team": "Delivery",
    "actual_team": "Delivery",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"not yet considered lost\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -5529,7 +6101,13 @@
     15199
    ],
    "seconds": 81.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0130",
@@ -5590,7 +6168,13 @@
     13233
    ],
    "seconds": 31.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0131",
@@ -5657,7 +6241,13 @@
     12854
    ],
    "seconds": 56.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0132",
@@ -5719,7 +6309,13 @@
     10813
    ],
    "seconds": 29.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0133",
@@ -5782,7 +6378,13 @@
     21233
    ],
    "seconds": 42.3,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0134",
@@ -5844,7 +6446,13 @@
     40440
    ],
    "seconds": 58.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0135",
@@ -5857,7 +6465,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"return received\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -5906,7 +6516,13 @@
     15782
    ],
    "seconds": 33.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0136",
@@ -5970,7 +6586,13 @@
     29229
    ],
    "seconds": 87.7,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0137",
@@ -5986,7 +6608,9 @@
    "notes": [
     "Status awaiting_approval, expected awaiting_customer.",
     "Cited POL-RET-02, POL-RET-03, POL-RET-06; expected one of POL-SEC-01, POL-RET-01.",
-    "Stop reason: awaiting_approval."
+    "Stop reason: awaiting_approval.",
+    "Judge: reply does not convey \"item must be returned first\".",
+    "Judge: reply does not convey \"return instructions\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -6038,7 +6662,13 @@
     16244
    ],
    "seconds": 40.8,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0138",
@@ -6099,7 +6729,13 @@
     10533
    ],
    "seconds": 32.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0139",
@@ -6164,7 +6800,13 @@
     9695
    ],
    "seconds": 32.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0140",
@@ -6227,7 +6869,13 @@
     12390
    ],
    "seconds": 36.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0141",
@@ -6288,7 +6936,13 @@
     10736
    ],
    "seconds": 29.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0142",
@@ -6354,7 +7008,13 @@
     9971
    ],
    "seconds": 32.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0143",
@@ -6415,7 +7075,13 @@
     13291
    ],
    "seconds": 34.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0144",
@@ -6481,7 +7147,13 @@
     16371
    ],
    "seconds": 63.8,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0145",
@@ -6496,7 +7168,9 @@
    "passed": false,
    "notes": [
     "Team Human Review, expected Returns.",
-    "Stop reason: policy_conflict."
+    "Stop reason: policy_conflict.",
+    "Judge: unsupported claim: an unopened Kindle",
+    "Judge: unsupported claim: will contact you with next steps"
    ],
    "trace_available": true,
    "status_ok": true,
@@ -6548,7 +7222,16 @@
     17466
    ],
    "seconds": 83.7,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "an unopened Kindle",
+    "will contact you with next steps"
+   ]
   },
   {
    "ticket_id": "T-0146",
@@ -6561,7 +7244,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"return received\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -6611,7 +7296,13 @@
     19701
    ],
    "seconds": 42.2,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0147",
@@ -6676,7 +7367,13 @@
     24914
    ],
    "seconds": 86.6,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0148",
@@ -6691,7 +7388,8 @@
    "passed": false,
    "notes": [
     "Status resolved, expected escalated.",
-    "Stop reason: completed."
+    "Stop reason: completed.",
+    "Judge: reply does not convey \"sent to Billing staff\"."
    ],
    "trace_available": true,
    "status_ok": false,
@@ -6742,7 +7440,13 @@
     16037
    ],
    "seconds": 42.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0149",
@@ -6804,7 +7508,13 @@
     14216
    ],
    "seconds": 37.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0150",
@@ -6866,7 +7576,13 @@
     9826
    ],
    "seconds": 32.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0151",
@@ -6881,7 +7597,8 @@
    "passed": false,
    "notes": [
     "Cited POL-RET-02, POL-RET-03, POL-RET-06; expected one of POL-RET-01.",
-    "Stop reason: awaiting_customer."
+    "Stop reason: awaiting_customer.",
+    "Judge: reply does not convey \"explains the item must be returned first\"."
    ],
    "trace_available": true,
    "status_ok": true,
@@ -6934,7 +7651,13 @@
     13442
    ],
    "seconds": 61.5,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0152",
@@ -6947,7 +7670,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: reply does not convey \"return received\"."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -6996,7 +7721,13 @@
     12197
    ],
    "seconds": 31.1,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0153",
@@ -7061,7 +7792,13 @@
     15621
    ],
    "seconds": 37.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0154",
@@ -7074,7 +7811,9 @@
    "expected_team": "Returns",
    "actual_team": "Returns",
    "passed": true,
-   "notes": [],
+   "notes": [
+    "Judge: unsupported claim: The reply asserts a refund date of 2026-10-20, but this date is not explicitly supported by the case records or receipts."
+   ],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
@@ -7127,7 +7866,15 @@
     19674
    ],
    "seconds": 48.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": [
+    "The reply asserts a refund date of 2026-10-20, but this date is not explicitly supported by the case records or receipts."
+   ]
   },
   {
    "ticket_id": "T-0155",
@@ -7189,7 +7936,13 @@
     18329
    ],
    "seconds": 37.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 1,
+   "judge_facts_stated": 1,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0156",
@@ -7257,7 +8010,13 @@
     10192
    ],
    "seconds": 34.4,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 4,
+   "judge_facts_stated": 4,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0157",
@@ -7324,7 +8083,13 @@
     12385
    ],
    "seconds": 39.6,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0158",
@@ -7388,7 +8153,13 @@
     37383
    ],
    "seconds": 58.9,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 2,
+   "judge_facts_stated": 2,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0159",
@@ -7454,7 +8225,13 @@
     11352
    ],
    "seconds": 35.0,
-   "error": null
+   "error": null,
+   "judge_replied": true,
+   "judge_error": null,
+   "judge_facts_total": 3,
+   "judge_facts_stated": 3,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   },
   {
    "ticket_id": "T-0160",
@@ -7521,7 +8298,13 @@
     15259
    ],
    "seconds": 74.6,
-   "error": null
+   "error": null,
+   "judge_replied": false,
+   "judge_error": null,
+   "judge_facts_total": 0,
+   "judge_facts_stated": 0,
+   "judge_contradicted": false,
+   "judge_unsupported_claims": []
   }
  ]
 }

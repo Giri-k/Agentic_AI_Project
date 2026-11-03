@@ -27,6 +27,7 @@ from .store import load_jsonl
 PROMPT_VERSION = "judge_v1"
 PROMPT = (Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt").read_text()
 JUDGE_EFFORT = "high"  # the judge is the same model as the agent (the only one on the course key), so it thinks harder
+JUDGE_TIMEOUT_S = 180  # high-effort calls run long; the agent's 60 s limit is for keeping live runs responsive
 
 
 class FactVerdict(Strict):
@@ -108,8 +109,8 @@ def judge_run(run_id, labels, workers=6, redo=False, llm_factory=None, results=R
     def make_llm():
         if llm_factory is not None:
             return llm_factory()
-        from .llm import OpenAILLM
-        return OpenAILLM(reasoning_effort=JUDGE_EFFORT)
+        from .llm import OpenAILLM, client
+        return OpenAILLM(client=client().with_options(timeout=JUDGE_TIMEOUT_S), reasoning_effort=JUDGE_EFFORT)
 
     def one(ticket_id):
         if not hasattr(local, "llm"):
