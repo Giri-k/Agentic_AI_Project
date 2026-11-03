@@ -10,3 +10,6 @@ __pycache__/
 
 # Working state from runs (store copy, traces, checkpoints, outbox, embedding cache)
 runtime/
+
+# Per-ticket evaluation files (rows, traces, judge verdicts) stay local; results/eval/*.json are committed
+results/eval/*/
