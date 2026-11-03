@@ -15,10 +15,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Literal
 
-from .config import DATA, POLICY_DIR
-from .eval_run import RESULTS, rescore
+from .config import CHAT_MODEL, DATA, POLICY_DIR
+from .eval_run import RESULTS, _digest, policy_snapshot, policy_texts, rescore, saved_events
 from .schemas import Strict
-from .store import load_jsonl
+from .store import atomic_write, load_jsonl
 
 PROMPT_VERSION = "judge_v1"
 PROMPT = (Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt").read_text()
@@ -37,7 +37,7 @@ class Judgement(Strict):
     unsupported_claims: list[str]
 
 
-def build_case(label, events):
+def build_case(label, events, policy_documents=None):
     """What the judge sees for one ticket, or None when no reply was sent (nothing to judge)."""
     ok = {e["call_id"]: e for e in events if e["event"] == "tool_result" and e.get("ok")}
     sent, records, receipts = [], None, []
@@ -56,7 +56,9 @@ def build_case(label, events):
     if not sent:
         return None
     cited = sorted({c for m in sent for c in m.get("citations", [])})
-    policies = {pid: (POLICY_DIR / f"{pid}.md").read_text() for pid in cited if (POLICY_DIR / f"{pid}.md").exists()}
+    policies = ({pid: (POLICY_DIR / f"{pid}.md").read_text()
+                 for pid in cited if (POLICY_DIR / f"{pid}.md").exists()} if policy_documents is None else
+                {pid: policy_documents[pid] for pid in cited if pid in policy_documents})
     return {"reply": [m["body"] for m in sent], "expected_facts": label.get("response_facts", []),
             "records": records or {}, "receipts": receipts, "policies": policies}
 
@@ -67,23 +69,32 @@ def judge_case(llm, case):
     return llm.parse(messages, Judgement)
 
 
-def judge_row(ticket_id, label, events, llm):
+def judgement_fingerprint(label, events, policy_documents=None):
+    """A verdict belongs to one execution, label, policy evidence and judge configuration."""
+    return _digest({"label": label, "events": events, "case": build_case(label, events, policy_documents),
+                    "model": CHAT_MODEL, "effort": JUDGE_EFFORT,
+                    "prompt_version": PROMPT_VERSION, "prompt": PROMPT,
+                    "implementation": Path(__file__).read_text()})
+
+
+def judge_row(ticket_id, label, events, llm, policy_documents=None):
     """The judge's row for one ticket. No reply sent: no call, and the facts don't count toward coverage."""
-    case = build_case(label, events)
+    case = build_case(label, events, policy_documents)
+    identity = {"ticket_id": ticket_id, "fingerprint": judgement_fingerprint(label, events, policy_documents)}
     if case is None:
-        return {"ticket_id": ticket_id, "replied": False, "facts": [], "unsupported_claims": [], "error": None}
+        return {**identity, "replied": False, "facts": [], "unsupported_claims": [], "error": None}
     try:
         out = judge_case(llm, case)
     except Exception as e:  # recorded, not hidden; a rerun with --redo tries again
-        return {"ticket_id": ticket_id, "replied": True, "facts": [], "unsupported_claims": [],
+        return {**identity, "replied": True, "facts": [], "unsupported_claims": [],
                 "error": f"{type(e).__name__}: {e}"[:200]}
     facts = [f.model_dump() for f in out.facts]
     if len(facts) != len(case["expected_facts"]):  # a malformed answer must not shift verdicts onto other facts
-        return {"ticket_id": ticket_id, "replied": True, "facts": [], "unsupported_claims": [],
+        return {**identity, "replied": True, "facts": [], "unsupported_claims": [],
                 "error": f"judge returned {len(facts)} verdicts for {len(case['expected_facts'])} facts"}
     for f, expected in zip(facts, case["expected_facts"]):
         f["fact"] = expected
-    return {"ticket_id": ticket_id, "replied": True, "facts": facts,
+    return {**identity, "replied": True, "facts": facts,
             "unsupported_claims": out.unsupported_claims, "error": None}
 
 
@@ -91,12 +102,26 @@ def judge_run(run_id, labels, workers=6, redo=False, llm_factory=None, results=R
     """Judge every ticket of a finished run (resuming), then rescore the run so its file includes the judge."""
     out = Path(results) / run_id
     path = out / "judge.jsonl"
+    summary = json.loads((Path(results) / f"{run_id}.json").read_text())
+    manifest = out / "manifest.json"
+    execution = json.loads(manifest.read_text()) if manifest.exists() else None
+    if execution and summary.get("execution_fingerprint") != execution["fingerprint"]:
+        raise ValueError("The execution changed or has not finished; complete the evaluation before judging it.")
+    policies = execution["policies"] if execution else policy_texts()
+    if policy_snapshot(policies) != summary.get("policy_snapshot"):
+        raise ValueError("The original policy snapshot is unavailable; restore its policy evidence before judging.")
+    if not (out / "rows.jsonl").exists():
+        raise ValueError(f"{run_id} is a summary-only historical run; restore its original rows and traces before judging.")
+    rows = load_jsonl(out / "rows.jsonl")
+    events = {row["ticket_id"]: saved_events(out, row) for row in rows}
     if redo:
         path.unlink(missing_ok=True)
-    kept = [r for r in load_jsonl(path) if r["error"] is None] if path.exists() else []
-    path.write_text("".join(json.dumps(r) + "\n" for r in kept))  # failed attempts are retried
+    kept = [r for r in load_jsonl(path)
+            if r["error"] is None and r["ticket_id"] in events
+            and r.get("fingerprint") == judgement_fingerprint(labels[r["ticket_id"]], events[r["ticket_id"]], policies)
+            ] if path.exists() else []
+    atomic_write(path, "".join(json.dumps(r) + "\n" for r in kept))  # stale or failed attempts are retried
     done = {r["ticket_id"] for r in kept}
-    rows = load_jsonl(out / "rows.jsonl")
     todo = [r["ticket_id"] for r in rows if r["ticket_id"] not in done]
     print(f"{run_id}: {len(rows)} tickets, {len(done)} already judged, {len(todo)} to judge")
 
@@ -109,10 +134,11 @@ def judge_run(run_id, labels, workers=6, redo=False, llm_factory=None, results=R
         return OpenAILLM(client=client().with_options(timeout=JUDGE_TIMEOUT_S), reasoning_effort=JUDGE_EFFORT)
 
     def one(ticket_id):
+        if build_case(labels[ticket_id], events[ticket_id], policies) is None:
+            return judge_row(ticket_id, labels[ticket_id], events[ticket_id], None, policies)
         if not hasattr(local, "llm"):
             local.llm = make_llm()
-        events = load_jsonl(out / "traces" / f"{ticket_id}.jsonl")
-        return judge_row(ticket_id, labels[ticket_id], events, local.llm)
+        return judge_row(ticket_id, labels[ticket_id], events[ticket_id], local.llm, policies)
 
     lock = threading.Lock()
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:

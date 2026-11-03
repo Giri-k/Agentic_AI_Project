@@ -9,8 +9,6 @@ const zeroBudget = {
   revisions: 0,
 };
 const limits = { ...health.limits, tool_calls: 8 };
-const notice =
-  "This MOCK configuration uses a different tool-call allowance than the backend limit.";
 
 // A stateful HTTP fixture exercises real query invalidation and polling without a model or browser bridge.
 export function executionFixture() {
@@ -138,8 +136,6 @@ export function executionFixture() {
       execution: {
         budget: { ...budget },
         limits,
-        backend_limits: health.limits,
-        budget_notice: notice,
         active_run_id: active ? runId : null,
         can_run: !active && !detail.state.last_result,
         can_resume:
@@ -174,8 +170,6 @@ export function executionFixture() {
           trace: true,
         },
         limits,
-        backend_limits: health.limits,
-        budget_notice: notice,
       };
     else if (path === "/api/tickets")
       body = summaries.map((ticket) =>
@@ -249,9 +243,9 @@ export function executionFixture() {
         system = init.body
           ? (JSON.parse(String(init.body)).system ?? system)
           : system;
-        runId = resuming ? "mock-resume-2" : "mock-run-1";
+        runId = resuming ? "resume-2" : "run-1";
         active = true;
-        event("run_started", { mode, system, model: "mock" });
+        event("run_started", { mode, system, model: "gpt-5-nano" });
         event("model_call", {
           n: resuming ? 4 : 1,
           tool_calls: ["ticket_get"],
@@ -266,5 +260,5 @@ export function executionFixture() {
       headers: { "Content-Type": "application/json" },
     });
   }
-  return { fetch: fetcher, finishRun, detail: currentDetail, events, notice };
+  return { fetch: fetcher, finishRun, detail: currentDetail, events };
 }

@@ -7,6 +7,7 @@ really wrote. Money and email are still simulated: refunds and replies only exis
 
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
 from threading import RLock, Thread
 from typing import Any
@@ -18,6 +19,7 @@ from agent.config import (CHAT_MODEL, MAX_MODEL_CALLS, MAX_RETRIES, MAX_REVISION
                           MAX_TOOL_CALLS, RUNTIME)
 from agent.dispatcher import Dispatcher
 from agent.eval_run import RESULTS
+from agent.progress import load_progress
 from agent.schemas import Category
 from agent.staff import approve as staff_approve
 from agent.staff import staged_approvals
@@ -26,15 +28,32 @@ from agent.tools import _order_view
 from agent.trace import Trace
 
 from .adapter import AdapterError
-from .evaluation import build_eval_runs, build_retrieval_metrics, eval_summaries, load_measured
+from .evaluation import eval_summaries, load_measured
 from .grading import expected_outcome
-from .mock_adapter import _policy_from_file
 
 LIMITS = {"model_calls": MAX_MODEL_CALLS, "tool_calls": MAX_TOOL_CALLS, "retries": MAX_RETRIES,
           "schema_repairs": MAX_SCHEMA_REPAIRS, "revisions": MAX_REVISIONS}
 APPROVAL_NEEDED = re.compile(r"staff approval for (\d+) cents", re.I)
-GRADER_WARNING = ("Draft fixture labels are shown for inspection. These checks are structural; the reply's meaning "
-                  "and grounding still need human review.")
+NO_RETRIEVAL = {"measured": False, "queries": 0, "methods": [],
+                "provenance": "No retrieval measurement yet: run python -m agent.eval_retrieval --save."}
+
+
+def _policy_from_file(path: Path, expected_id: str) -> dict[str, Any]:
+    """Parse the existing simple policy markdown without adding a YAML dependency."""
+    text = path.read_text(encoding="utf-8")
+    title = re.search(r"^#\s+(.+)$", text, flags=re.MULTILINE)
+    metadata = dict(re.findall(r"^(id|version|effective_date):\s*([^\n]+)$", text, flags=re.MULTILINE))
+    sections = {key: "" for key in ("S1", "S2", "S3", "S4")}
+    chunks = re.split(r"^##\s+(S[1-4])\b[^\n]*\n", text, flags=re.MULTILINE)
+    for index in range(1, len(chunks), 2):
+        sections[chunks[index]] = chunks[index + 1].strip()
+    return {
+        "policy_id": metadata.get("id", expected_id).strip("\"'"),
+        "title": title.group(1).strip() if title else expected_id,
+        "version": metadata.get("version", "").strip("\"'"),
+        "effective_date": metadata.get("effective_date", "").strip("\"'"),
+        "sections": sections,
+    }
 
 
 def _default_llm():
@@ -75,10 +94,7 @@ class RealAdapter:
                         for tid in ids}
         policy_dir = data_dir.parents[1] / "policies"
         self._policies = {pid: _policy_from_file(policy_dir / f"{pid}.md", pid) for pid in sorted(self._store.policy_ids)}
-        as_of = self._fresh().as_of
         self._results = Path(results)
-        self._mock_runs = build_eval_runs(self._labels, self._splits, self._policies, as_of)
-        self._mock_retrieval = build_retrieval_metrics(self._labels, self._splits, self._policies)
 
     # --- reading ---
 
@@ -105,7 +121,7 @@ class RealAdapter:
                     "active_ticket_id": self._active["ticket_id"] if self._active else None, "model": CHAT_MODEL,
                     "capabilities": {"run": True, "resume": True, "approve": True, "reset": True, "trace": True,
                                      "evaluation": True, "grader": True},
-                    "limits": dict(LIMITS), "backend_limits": dict(LIMITS), "budget_notice": None}
+                    "limits": dict(LIMITS)}
 
     def is_running(self) -> bool:
         """Whether the one background worker is busy."""
@@ -139,7 +155,7 @@ class RealAdapter:
     def get_ticket(self, ticket_id: str) -> dict[str, Any]:
         """Ticket, the customer's own orders (same view the agent gets), saved state, outbox and run controls."""
         with self._lock:
-            ticket = self._require_ticket(ticket_id)
+            ticket = deepcopy(self._require_ticket(ticket_id))  # a caller editing the view can't change ours
             store = self._fresh()
             state = store.ticket_state(ticket_id)
             orders, inaccessible = [], []
@@ -169,19 +185,27 @@ class RealAdapter:
         return events
 
     def _last_run(self, ticket_id: str) -> dict[str, Any] | None:
-        """The latest run_started event (staff approvals excluded), or None if the ticket never ran."""
-        return next((e for e in reversed(self._trace_events(ticket_id)) if e["event"] == "run_started"), None)
+        """Latest execution identity, including progress charged before a trace could be written."""
+        last = next((e for e in reversed(self._trace_events(ticket_id)) if e["event"] == "run_started"), None)
+        progress = load_progress(self._fresh(), ticket_id)
+        if progress and progress.get("run_id") and (last is None or progress["run_id"] != last["run_id"]):
+            return {"run_id": progress["run_id"], "system": progress["system"], "mode": progress["mode"]}
+        return last
 
     def _budget(self, store: Store, ticket_id: str, last: dict[str, Any] | None) -> dict[str, int]:
-        """Agent: the saved per-ticket counters. Baseline: counted from its latest invocation's trace."""
+        """Live lifetime counters saved with action receipts; legacy runs fall back to their evidence."""
+        progress = load_progress(store, ticket_id, last.get("system") if last else None)
+        if progress:
+            return {key: progress["budget"].get(key, 0) for key in LIMITS}
         checkpoint = agent_loop.load_checkpoint(store, ticket_id)
-        if last and last.get("system") == "agent" and checkpoint:
-            return {key: checkpoint["budget"][key] for key in LIMITS}
-        events = [e for e in self._trace_events(ticket_id) if last and e["run_id"] == last["run_id"]]
-        return {"model_calls": sum(e["event"] == "model_call" for e in events),
+        events = self._trace_events(ticket_id) if last else []
+        recorded = {"model_calls": sum(e["event"] == "model_call" for e in events),
                 "tool_calls": sum(e["event"] == "tool_result" for e in events),
                 "retries": sum(e["event"] == "tool_result" and bool(e.get("retry")) for e in events),
-                "schema_repairs": 0, "revisions": 0}
+                "schema_repairs": sum(e["event"] == "schema_repair" for e in events),
+                "revisions": sum(e["event"] == "revision" for e in events)}
+        saved = checkpoint.get("budget", {}) if last and last.get("system") == "agent" and checkpoint else {}
+        return {key: max(recorded[key], saved.get(key, 0)) for key in LIMITS}
 
     def _pending_refund(self, store: Store, ticket_id: str) -> dict[str, Any] | None:
         """The refund a paused ticket waits for, read from the agent's saved requirement (never from labels)."""
@@ -195,16 +219,25 @@ class RealAdapter:
                  if store.order(oid) and store.order(oid)["customer_id"] == ticket["customer_id"]]
         if not owned:
             return None
+        mentioned = set(re.findall(r"\bO-\d+\b", " ".join(requirements))) & set(owned)
+        if len(mentioned) == 1:
+            order_id = mentioned.pop()
+        elif len(owned) == 1:
+            order_id = owned[0]
+        else:
+            # Multiple owned orders need an explicit target, not a guess based on available approvals.
+            return None
         staged = next((a for a in staged_approvals().values()
-                       if a["order_id"] in owned and (cents is None or a["amount_cents"] == cents)), None)
-        order_id = staged["order_id"] if staged else owned[0]
+                       if a["order_id"] == order_id and cents is not None and a["amount_cents"] == cents), None)
         return {"order_id": order_id, "amount_cents": cents, "approval_id": staged["approval_id"] if staged else None,
                 "reason": "; ".join(requirements) or "Staff must decide the refund"}
 
     def _resume_blocked_reason(self, store: Store, ticket_id: str, last: dict[str, Any] | None) -> str | None:
         """Why Resume is unavailable, or None. Blocks resumes that would only spend budget without new input."""
         status = store.ticket_state(ticket_id)["status"]
-        if status not in agent_loop.RESUMABLE:
+        progress = load_progress(store, ticket_id, last.get("system") if last else None)
+        interrupted_start = status == "new" and bool(progress and progress["system"] == "agent" and progress.get("in_progress"))
+        if status not in agent_loop.RESUMABLE and not interrupted_start:
             return "This ticket is not paused."
         if last is None:
             return "Run the agent first; this ticket's saved state was not created by a run."
@@ -212,16 +245,27 @@ class RealAdapter:
             return "No saved agent checkpoint for this ticket. Reset and run it again."
         if status == "awaiting_customer":
             return "Waiting for the customer to reply; customer replies are not simulated in this console."
+        minimum_tools = 3  # re-read current records, send a reply, save the outcome
         if status == "awaiting_approval":
-            ticket = store.tickets[ticket_id]
-            usable = [a for oid in ticket["order_ids"] for a in store.approvals(oid)
-                      if store.order(oid)["customer_id"] == ticket["customer_id"]
-                      and not store.refunds(approval_id=a["approval_id"])]
-            if not usable:
-                return "No active, unused staff approval for this ticket's order yet. Approve it on the Approvals page."
+            pending = self._pending_refund(store, ticket_id)
+            if pending is None or pending["amount_cents"] is None:
+                return "Staff must establish the exact refund order and amount before this ticket can resume."
+            oid, cents = pending["order_id"], pending["amount_cents"]
+            progress = load_progress(store, ticket_id, last.get("system"))
+            own_receipts = {action["receipt_id"] for action in store.ticket_state(ticket_id)["actions"]}
+            committed = bool(progress and progress.get("in_progress") and any(
+                refund["amount_cents"] == cents and refund["status"] in {"issued", "settled"}
+                and refund["refund_id"] in own_receipts for refund in store.refunds(oid)))
+            usable = any(a["amount_cents"] == cents and not store.refunds(approval_id=a["approval_id"])
+                         for a in store.approvals(oid))
+            if not usable and not committed:
+                return "No active, unused staff approval for this exact order and amount yet. Approve it on the Approvals page."
+            minimum_tools += (0 if committed else 1) + (1 if last.get("system") == "baseline" else 0)
+        if last.get("system") == "baseline" and load_progress(store, ticket_id, "baseline") is None:
+            return "This older baseline run has no saved lifetime budget; it needs staff recovery."
         budget = self._budget(store, ticket_id, last)
-        if last.get("system") == "agent" and (MAX_MODEL_CALLS - budget["model_calls"] < 2
-                                              or MAX_TOOL_CALLS - budget["tool_calls"] < 2):
+        minimum_models = 2 if last.get("system") == "agent" else 1
+        if MAX_MODEL_CALLS - budget["model_calls"] < minimum_models or MAX_TOOL_CALLS - budget["tool_calls"] < minimum_tools:
             return "This ticket's run budget is used up; it needs staff recovery."
         return None
 
@@ -230,11 +274,10 @@ class RealAdapter:
         last = self._last_run(ticket_id)
         blocked = self._resume_blocked_reason(store, ticket_id, last)
         busy = "Another ticket is running." if self._active else None
-        return {"budget": self._budget(store, ticket_id, last), "limits": dict(LIMITS), "backend_limits": dict(LIMITS),
-                "budget_notice": None,
+        return {"budget": self._budget(store, ticket_id, last), "limits": dict(LIMITS),
                 "active_run_id": self._active["run_id"] if self._running(ticket_id) else None,
                 "last_run_id": last["run_id"] if last else None, "system": last.get("system") if last else None,
-                "scenario": "standard", "last_mode": last.get("mode") if last else None,
+                "last_mode": last.get("mode") if last else None,
                 "can_run": self._active is None and last is None,
                 "run_blocked_reason": busy or ("This ticket already ran. Reset the workspace to run it again."
                                                if last else None),
@@ -255,11 +298,10 @@ class RealAdapter:
             self._require_ticket(ticket_id)
             store = self._fresh()
             last = self._last_run(ticket_id)
-            execution = {"last_run_id": last["run_id"], "last_mode": last.get("mode"), "scenario": "standard",
+            execution = {"last_run_id": last["run_id"], "last_mode": last.get("mode"),
                          "system": last.get("system")} if last else None
             expected = expected_outcome(self._labels[ticket_id], store.ticket_state(ticket_id),
                                         self._trace_events(ticket_id), execution, self._running(ticket_id))
-        expected.update(mock=False, warning=GRADER_WARNING)
         return expected
 
     # --- staff and policies ---
@@ -310,13 +352,12 @@ class RealAdapter:
         """One policy's metadata and sections S1-S4."""
         if policy_id not in self._policies:
             raise AdapterError(404, f"Policy {policy_id!r} was not found.")
-        return dict(self._policies[policy_id])
+        return deepcopy(self._policies[policy_id])
 
     def _evaluation(self) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-        """Measured results from results/eval/ (read on each request, so a finished run shows without a restart).
-        The labelled mock snapshots appear only when nothing has been measured yet."""
+        """Measured results from results/eval/, read on each request so a finished run shows without a restart."""
         runs, retrieval = load_measured(self._results)
-        return runs or self._mock_runs, retrieval or self._mock_retrieval
+        return runs, retrieval or NO_RETRIEVAL
 
     def list_eval_runs(self) -> list[dict[str, Any]]:
         """Evaluation runs: measured ones once agent.eval_run has written them."""
@@ -330,7 +371,7 @@ class RealAdapter:
         return runs[run_id]
 
     def retrieval_metrics(self) -> dict[str, Any]:
-        """Retrieval metrics: measured once agent.eval_retrieval --save has written them."""
+        """Retrieval metrics written by agent.eval_retrieval --save (an empty table until then)."""
         return self._evaluation()[1]
 
     def reset(self) -> dict[str, int]:
@@ -344,14 +385,12 @@ class RealAdapter:
 
     # --- runs ---
 
-    def start_run(self, ticket_id: str, system: str, scenario: str = "standard") -> str:
-        """Start one real agent or baseline run in the background. Forced mock tests can't be replayed for real."""
+    def start_run(self, ticket_id: str, system: str) -> str:
+        """Start one real agent or baseline run in the background."""
         with self._lock:
             self._require_ticket(ticket_id)
             if system not in {"agent", "baseline"}:
                 raise AdapterError(400, "system must be 'agent' or 'baseline'.")
-            if scenario in {"repeated_call", "refund_gate"}:
-                raise AdapterError(400, "Forced tests are mock-only. Run standard mode to see what the real agent does.")
             if self._active is not None:
                 raise AdapterError(409, "A run is already in progress. Wait for it to finish.")
             if self._last_run(ticket_id) is not None:

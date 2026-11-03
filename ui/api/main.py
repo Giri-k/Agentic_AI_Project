@@ -1,7 +1,5 @@
-"""Thin local HTTP routes; adapters own fixture access and future agent integration."""
+"""Thin local HTTP routes over the real adapter: the agent's store, tools, agent and baseline."""
 
-import os
-from importlib import import_module
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -10,7 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from .adapter import Adapter, AdapterError
-from .mock_adapter import MockAdapter
+from .real_adapter import RealAdapter
 
 Status = Literal["new", "resolved", "closed", "awaiting_customer", "awaiting_approval", "escalated", "failed_safe"]
 Team = Literal["Delivery", "Returns", "Billing", "Human Review"]
@@ -24,40 +22,17 @@ class RunRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     system: Literal["agent", "baseline"] = "agent"
-    scenario: Literal["standard", "timeout_retry", "repeated_call", "refund_gate"] = "standard"
-
-
-def _configured_adapter() -> Adapter:
-    """Choose the requested mode explicitly; a missing real adapter never falls back to mock."""
-    mode = os.environ.get("OPUS_ADAPTER", "mock").strip().lower()
-    if mode == "mock":
-        return MockAdapter()
-    if mode == "real":
-        try:
-            module = import_module("ui.api.real_adapter")
-            adapter_class = module.RealAdapter
-        except (ImportError, AttributeError) as error:
-            raise AdapterError(503, "Real adapter is not available yet. Set OPUS_ADAPTER=mock to use the local fixture preview.") from error
-        return adapter_class()
-    raise AdapterError(503, "OPUS_ADAPTER must be 'mock' or 'real'.")
 
 
 def _adapter(request: Request) -> Adapter:
-    """Resolve the app-owned adapter or report an unavailable configured mode."""
-    if request.app.state.adapter_error is not None:
-        raise request.app.state.adapter_error
+    """The app's adapter (the real one, or a test's)."""
     return request.app.state.adapter
 
 
 def create_app(adapter: Adapter | None = None) -> FastAPI:
-    """Construct an app with an injectable adapter for isolated local tests."""
+    """Construct the app; tests pass their own adapter (e.g. a RealAdapter on a temp store)."""
     app = FastAPI(title="OP-US Support Console", version="0.1.0")
-    app.state.adapter_error = None
-    try:
-        app.state.adapter = adapter if adapter is not None else _configured_adapter()
-    except AdapterError as error:
-        app.state.adapter = None
-        app.state.adapter_error = error
+    app.state.adapter = adapter if adapter is not None else RealAdapter()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -94,7 +69,7 @@ def create_app(adapter: Adapter | None = None) -> FastAPI:
     @app.post("/api/tickets/{ticket_id}/run", status_code=202)
     def run_ticket(ticket_id: str, body: RunRequest, source: Annotated[Adapter, Depends(_adapter)]):
         """Start work in the adapter's background worker instead of blocking an HTTP request."""
-        return {"run_id": source.start_run(ticket_id, body.system, body.scenario)}
+        return {"run_id": source.start_run(ticket_id, body.system)}
 
     @app.post("/api/tickets/{ticket_id}/resume", status_code=202)
     def resume_ticket(ticket_id: str, source: Annotated[Adapter, Depends(_adapter)]):
@@ -138,12 +113,12 @@ def create_app(adapter: Adapter | None = None) -> FastAPI:
 
     @app.get("/api/eval/runs/{run_id}")
     def eval_run(run_id: str, source: Annotated[Adapter, Depends(_adapter)]):
-        """Return a snapshot whose provenance distinguishes fixtures from real measurements."""
+        """Return one measured evaluation run with its per-ticket rows."""
         return source.get_eval_run(run_id)
 
     @app.get("/api/eval/retrieval")
     def retrieval(source: Annotated[Adapter, Depends(_adapter)]):
-        """Return retrieval measurements or clearly labeled illustrative mock rankings."""
+        """Return the measured retrieval metrics."""
         return source.retrieval_metrics()
 
     @app.post("/api/admin/reset")

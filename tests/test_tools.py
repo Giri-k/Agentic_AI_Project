@@ -1,5 +1,7 @@
 """Each tool's own checks, called directly (no dispatcher)."""
 
+from copy import deepcopy
+
 import pytest
 from pydantic import ValidationError
 
@@ -18,6 +20,14 @@ def ctx_for(store, ticket_id):
 def refund(store, ticket_id, **kw):
     """Call process_refund with model-style JSON arguments."""
     return process_refund(store, ctx_for(store, ticket_id), ProcessRefundArgs.model_validate_json(args(**kw)))
+
+
+def billing_approval(store, approval_id, order_id, cents):
+    """A trusted staff record in an isolated test store, including intentionally conflicting amounts."""
+    approval = {"approval_id": approval_id, "order_id": order_id, "amount_cents": cents,
+                "approved_by": "staff-test", "approved_at": store.as_of, "reason": "Duplicate-charge correction"}
+    store.data["approvals"].append(approval)
+    return approval
 
 
 def result_json(ticket_id, status, **kw):
@@ -115,6 +125,66 @@ def test_refund_on_another_customers_order_looks_like_missing_order(store):
     with pytest.raises(ToolError) as err:
         refund(store, "T-0039", order_id=other_order["order_id"], cents=100, approval_id="APR-8001")
     assert err.value.code == "ORDER_NOT_FOUND"
+
+
+@pytest.mark.parametrize("amount_choice", ["one_cent_over_excess", "all_captures"])
+def test_duplicate_charge_approval_cannot_refund_the_legitimate_purchase(store, amount_choice):
+    """An exact but excessive staff approval is refused before any write; staff can correct its amount."""
+    ticket_id, order_id = "T-0073", "O-60079"
+    order = store.order(order_id)
+    captured = store.captured_cents(order_id)
+    excess = captured - order["total_cents"]
+    assert excess > 0
+    amount = captured if amount_choice == "all_captures" else excess + 1
+    approval = billing_approval(store, "APR-BILLING-REVIEW", order_id, amount)
+    before = deepcopy(store.data)
+
+    with pytest.raises(ToolError) as err:
+        refund(store, ticket_id, order_id=order_id, cents=amount, approval_id=approval["approval_id"])
+    assert err.value.code == "APPROVAL_CONFLICT"
+    assert store.data == before
+
+    approval["amount_cents"] = excess  # staff reconciliation, never an amount resized by the agent
+    correction = refund(store, ticket_id, order_id=order_id, cents=excess, approval_id=approval["approval_id"])
+    assert correction["basis"] == "duplicate_capture" and correction["amount_cents"] == excess
+    assert store.remaining_refundable_cents(order_id) == order["total_cents"]
+    assert order["status"] != "refunded"
+
+
+@pytest.mark.parametrize("first_refund_status", ["issued", "settled"])
+def test_partial_billing_corrections_consume_the_excess_only_once(store, first_refund_status):
+    """Separate exact approvals may settle the excess in parts; new approvals cannot expose the purchase charge."""
+    ticket_id, order_id = "T-0073", "O-60079"
+    order = store.order(order_id)
+    excess = store.captured_cents(order_id) - order["total_cents"]
+    partial = excess // 3
+    first = billing_approval(store, "APR-BILLING-FIRST", order_id, partial)
+    refund(store, ticket_id, order_id=order_id, cents=partial, approval_id=first["approval_id"])
+    store.refunds(order_id)[0]["status"] = first_refund_status
+
+    with pytest.raises(ToolError) as reused:
+        refund(store, ticket_id, order_id=order_id, cents=partial, approval_id=first["approval_id"])
+    assert reused.value.code == "APPROVAL_ALREADY_USED"
+
+    too_much = billing_approval(store, "APR-BILLING-EXCESS", order_id, excess)
+    before = deepcopy(store.data)
+    with pytest.raises(ToolError) as conflict:
+        refund(store, ticket_id, order_id=order_id, cents=excess, approval_id=too_much["approval_id"])
+    assert conflict.value.code == "APPROVAL_CONFLICT"
+    assert store.data == before
+
+    rest = excess - partial
+    final = billing_approval(store, "APR-BILLING-FINAL", order_id, rest)
+    refund(store, ticket_id, order_id=order_id, cents=rest, approval_id=final["approval_id"])
+    assert sum(item["amount_cents"] for item in store.refunds(order_id)) == excess
+    assert store.remaining_refundable_cents(order_id) == order["total_cents"]
+    assert order["status"] != "refunded"
+
+    another = billing_approval(store, "APR-BILLING-AGAIN", order_id, 1)
+    with pytest.raises(ToolError) as exhausted:
+        refund(store, ticket_id, order_id=order_id, cents=1, approval_id=another["approval_id"])
+    assert exhausted.value.code == "APPROVAL_CONFLICT"
+    assert len(store.refunds(order_id)) == 2
 
 
 # --- cancel_order -------------------------------------------------------------------

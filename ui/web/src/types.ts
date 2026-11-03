@@ -11,8 +11,6 @@ export type Priority = "low" | "medium" | "high" | "critical";
 export type Channel = "email" | "chat" | "phone" | "social_media";
 export type Split = "dev" | "test" | "demo";
 export type Team = "Delivery" | "Returns" | "Billing" | "Human Review";
-export type RunScenario =
-  "standard" | "timeout_retry" | "repeated_call" | "refund_gate";
 
 export interface Budget {
   model_calls: number;
@@ -25,15 +23,12 @@ export interface Budget {
 export interface ExecutionState {
   budget: Budget;
   limits: Budget;
-  backend_limits?: Budget;
-  budget_notice?: string | null;
   active_run_id: string | null;
   can_run: boolean;
   run_blocked_reason?: string | null;
   can_resume: boolean;
   resume_blocked_reason: string | null;
   system: "agent" | "baseline" | null;
-  scenario?: RunScenario;
   last_mode?: "run" | "resume" | null;
 }
 
@@ -47,12 +42,10 @@ export interface TraceEvent {
 }
 
 export interface Health {
-  adapter: "mock" | "real";
+  adapter: "real";
   as_of: string;
   running: boolean;
   active_ticket_id?: string | null;
-  backend_limits?: Budget;
-  budget_notice?: string | null;
   capabilities: {
     run: boolean;
     resume: boolean;
@@ -240,10 +233,9 @@ export interface ExpectedOutcome {
   unresolved_requirements?: string[];
   phase: "initial" | "after_resume";
   source: string;
-  mock: boolean;
   warning: string;
   grading: {
-    state: "not_run" | "running" | "passed" | "failed" | "informational";
+    state: "not_run" | "running" | "passed" | "failed";
     checks: GradingCheck[];
     notes: string[];
   };
@@ -254,7 +246,6 @@ export interface EvalRunSummary {
   system: "agent" | "baseline";
   split: "dev" | "test";
   created_at: string;
-  mock: boolean;
   measured?: boolean;
   provenance?: string;
   benchmark_id?: string;
@@ -282,7 +273,7 @@ export interface EvalRun extends EvalRunSummary {
     avg_tool_calls: number | null;
     avg_tokens: number | null;
     avg_seconds: number | null;
-    // Measured runs only (agent.eval_run); illustrative snapshots leave them out.
+    // Saved measurements may omit fields that were not collected.
     success_rate?: number | null;
     category_accuracy?: number | null;
     category_macro_f1?: number | null;
@@ -300,6 +291,8 @@ export interface EvalRun extends EvalRunSummary {
     judge_fact_coverage?: number | null;
     judge_contradicted_replies?: number;
     judge_unsupported_replies?: number;
+    judged_replies?: number;
+    judge_errors?: number;
     harness_errors?: number;
   };
   by_group: { group: string; tickets: number; status_accuracy: number }[];
@@ -314,7 +307,6 @@ export interface EvalRun extends EvalRunSummary {
   }[];
 }
 export interface RetrievalMetrics {
-  mock: boolean;
   measured: boolean;
   provenance: string;
   queries: number;

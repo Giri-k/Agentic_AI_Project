@@ -55,13 +55,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("interactive mock execution", () => {
+describe("interactive execution", () => {
   it.each([
     {
       route: "/",
       endpoint: "/api/admin/reset",
       open: "Reset workspace",
-      title: "Reset the mock workspace?",
+      title: "Reset the working store?",
       confirm: "Reset workspace",
       cancel: "Keep workspace",
     },
@@ -170,7 +170,6 @@ describe("interactive mock execution", () => {
     expect(
       screen.getAllByText(/refund is waiting for staff approval/i).length,
     ).toBeGreaterThan(0);
-    expect(screen.getAllByText(scenario.notice).length).toBeGreaterThan(0);
     expect(
       fetchMock.mock.calls.filter(
         ([url, init]) =>

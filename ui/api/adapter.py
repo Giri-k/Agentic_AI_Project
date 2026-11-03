@@ -38,7 +38,7 @@ class Adapter(Protocol):
         """Report whether any execution is currently in progress."""
         ...
 
-    def start_run(self, ticket_id: str, system: str, scenario: str = "standard") -> str:
+    def start_run(self, ticket_id: str, system: str) -> str:
         """Schedule one background agent or baseline run and return its identifier."""
         ...
 
@@ -55,7 +55,7 @@ class Adapter(Protocol):
         ...
 
     def retrieval_metrics(self) -> dict[str, Any]:
-        """Read retrieval metrics with explicit measured/mock provenance."""
+        """Read the measured retrieval metrics."""
         ...
 
     def start_resume(self, ticket_id: str) -> str:

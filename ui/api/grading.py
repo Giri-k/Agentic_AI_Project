@@ -1,4 +1,4 @@
-"""Transparent structural fixture checks for the optional grader, never a model accuracy claim."""
+"""The optional grader: structural checks of a ticket's latest run against its label, never an accuracy claim."""
 
 import json
 from copy import deepcopy
@@ -6,10 +6,7 @@ from typing import Any
 
 from agent.eval_run import action_present
 
-WARNING = (
-    "Draft fixture labels are shown for inspection. MOCK runs are scripted from these same labels; "
-    "matching fields are not independent evidence of AI accuracy. Response facts require human or evaluator review."
-)
+WARNING = ("These checks are structural; whether the reply's meaning and grounding are right still needs review.")
 
 
 def expected_outcome(label: dict[str, Any], state: dict[str, Any], events: list[dict[str, Any]],
@@ -60,13 +57,11 @@ def expected_outcome(label: dict[str, Any], state: dict[str, Any], events: list[
     check("tool_args", "Required tool arguments", expected.get("expected_tool_args", {}), actual_args, args_ok)
     check("response_facts", "Response facts", expected.get("response_facts", []), result.get("response") if result else None,
           None, "Not semantically verified. Review the reply against the policy, records and receipts.")
-    forced = bool(execution and execution.get("scenario") in {"repeated_call", "refund_gate"})
-    grade_state = "running" if running else "not_run" if not completed else "informational" if forced else "failed" if any(item["passed"] is False for item in checks) else "passed"
+    grade_state = ("running" if running else "not_run" if not completed
+                   else "failed" if any(item["passed"] is False for item in checks) else "passed")
     notes = ["Only structural checks are automated; response meaning and factual grounding remain unverified."]
-    if forced:
-        notes.append("This is a deliberately forced safety/recovery test. It is not a normal agent trajectory or an accuracy result.")
     if resumed:
         notes.append("Checks use the after-resume annotation and the latest resumed invocation. Resume-specific response facts have not been annotated.")
-    expected.update(phase="after_resume" if resumed else "initial", source="draft fixture labels", mock=True,
-                    warning=WARNING, grading={"state": grade_state, "checks": checks, "notes": notes})
+    expected.update(phase="after_resume" if resumed else "initial", source="labels", warning=WARNING,
+                    grading={"state": grade_state, "checks": checks, "notes": notes})
     return deepcopy(expected)

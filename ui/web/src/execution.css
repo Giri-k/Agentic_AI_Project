@@ -141,22 +141,6 @@
 .trace-budget-full meter::-webkit-meter-optimum-value {
   background: #c6a45f;
 }
-.trace-budget-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 11px 22px;
-  border-bottom: 1px solid #eee6ce;
-  background: #fcf8ec;
-  color: #806a32;
-}
-.trace-budget-notice svg {
-  margin-top: 2px;
-}
-.trace-budget-notice p {
-  font-size: 10px;
-  line-height: 1.8;
-}
 .trace-filters {
   display: flex;
   align-items: center;
@@ -1070,12 +1054,6 @@
     font-size: 8px;
     line-height: 1.8;
   }
-  .trace-budget-notice {
-    padding: 10px 15px;
-  }
-  .trace-budget-notice p {
-    font-size: 9px;
-  }
   .trace-filters {
     padding: 12px 15px;
     gap: 12px;
@@ -1179,7 +1157,6 @@
 }
 :root[data-large-type="true"] .trace-budget > div,
 :root[data-large-type="true"] .trace-filters,
-:root[data-large-type="true"] .trace-budget-notice p,
 :root[data-large-type="true"] .pending-refund > div > span,
 :root[data-large-type="true"] .waiting-requirements,
 :root[data-large-type="true"] .staged-approval-reason {

@@ -35,11 +35,11 @@ function makeRun(system: "agent" | "baseline", split: "dev" | "test"): EvalRun {
     system,
     split,
     created_at: "2026-10-20T00:00:00Z",
-    mock: true,
-    measured: false,
+    measured: true,
     provenance: "Synthetic UI fixtures; no measured model performance.",
     benchmark_id: `mock-${split}`,
     policy_snapshot: "policies-v1",
+    settings: { model: "test/gpt-5-nano", reasoning_effort: "low" },
     metrics: {
       status_accuracy:
         tickets.filter((row) => row.passed).length / tickets.length,
@@ -47,6 +47,10 @@ function makeRun(system: "agent" | "baseline", split: "dev" | "test"): EvalRun {
       unauthorized_refunds_executed: 0,
       refund_risk_tickets: 0,
       unsupported_replies: 0,
+      judge_unsupported_replies: 2,
+      judged_replies: 12,
+      judge_contradicted_replies: 1,
+      judge_errors: 0,
       correct_pauses: 0,
       expected_pauses: 0,
       citation_precision: 1,
@@ -67,13 +71,19 @@ function makeRun(system: "agent" | "baseline", split: "dev" | "test"): EvalRun {
 }
 
 // The real route/query code consumes only read-only evaluation responses.
-function workspace(path = "/eval", mismatched = false, withMetrics = false) {
+function workspace(
+  path = "/eval",
+  mismatched = false,
+  withMetrics = false,
+  customize?: (runs: EvalRun[]) => void,
+) {
   const runs = [
     makeRun("agent", "test"),
     makeRun("baseline", "test"),
     makeRun("agent", "dev"),
     makeRun("baseline", "dev"),
   ];
+  customize?.(runs);
   if (mismatched) runs[1].policy_snapshot = "other-policies";
   const client = new QueryClient({
     defaultOptions: {
@@ -92,7 +102,7 @@ function workspace(path = "/eval", mismatched = false, withMetrics = false) {
             void by_end_state;
             // The real API includes headline metrics in summaries; older servers did not.
             return withMetrics
-              ? { ...summary, tickets: tickets.length, metrics, settings: { reasoning_effort: "low" } }
+              ? { ...summary, tickets: tickets.length, metrics }
               : summary;
           },
         );
@@ -100,8 +110,7 @@ function workspace(path = "/eval", mismatched = false, withMetrics = false) {
         body = runs.find((run) => run.run_id === pathname.split("/").at(-1));
       else if (pathname === "/api/eval/retrieval")
         body = {
-          mock: true,
-          measured: false,
+          measured: true,
           provenance: "Illustrative ranking fixtures.",
           queries: 44,
           methods: [
@@ -154,11 +163,9 @@ afterEach(() => {
 });
 
 describe("evaluation dashboard", () => {
-  it("discloses mock results, separates safety counts and preserves missing cost measurements", async () => {
+  it("shows measured results, separates safety counts and preserves missing cost measurements", async () => {
     const { user, fetchMock } = workspace();
-    expect(
-      await screen.findByText("MOCK DATA · Illustrative benchmark results"),
-    ).toBeTruthy();
+    expect(await screen.findByText("Measured results")).toBeTruthy();
     expect(
       screen.getByRole("heading", { name: "Unauthorized refunds" }),
     ).toBeTruthy();
@@ -170,10 +177,14 @@ describe("evaluation dashboard", () => {
       screen.getByRole("rowheader", { name: "Unauthorized refunds executed" }),
     ).toBeTruthy();
     const costs = screen
-      .getByText("Citations and execution costs")
+      .getByText("Actions, reply support, citations and execution costs")
       .closest("details")!;
     expect(costs.open).toBe(false);
-    await user.click(within(costs).getByText("Citations and execution costs"));
+    await user.click(
+      within(costs).getByText(
+        "Actions, reply support, citations and execution costs",
+      ),
+    );
     expect(costs.open).toBe(true);
     expect(within(costs).getAllByText("Not measured").length).toBeGreaterThan(
       0,
@@ -187,7 +198,9 @@ describe("evaluation dashboard", () => {
     expect(
       within(retrieval).getByRole("columnheader", { name: "Hit@3" }),
     ).toBeTruthy();
-    expect(screen.getByText(/no new retrieval experiment/)).toBeTruthy();
+    expect(
+      screen.getByText(/Measured with python -m agent.eval_retrieval/),
+    ).toBeTruthy();
     expect(
       fetchMock.mock.calls.every(
         ([, init]) => !init?.method || init.method === "GET",
@@ -197,7 +210,7 @@ describe("evaluation dashboard", () => {
 
   it("switches systems and split, filters ticket outcomes, and links to clearly identified current traces", async () => {
     const { user, fetchMock, runs } = workspace();
-    await screen.findByText("MOCK DATA · Illustrative benchmark results");
+    await screen.findByText("Measured results");
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Evaluation system" }),
       "baseline",
@@ -243,22 +256,37 @@ describe("evaluation dashboard", () => {
 
   it("compares every run side by side, test and dev split apart", async () => {
     workspace("/eval", false, true);
-    const section = await screen.findByRole("region", { name: "All runs compared" });
+    const section = await screen.findByRole("region", {
+      name: "All runs compared",
+    });
     const tables = within(section).getAllByRole("table");
     expect(tables).toHaveLength(2);
     expect(within(section).getByText(/Test split/)).toBeTruthy();
     expect(within(section).getByText(/Development split/)).toBeTruthy();
-    const headers = within(tables[0]).getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(["Metric", "Agent v1low effort", "Baseline v1low effort"]);
-    const success = within(tables[0]).getByRole("row", { name: /Overall success/ });
+    const headers = within(tables[0])
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent);
+    expect(headers).toEqual([
+      "Metric",
+      "Agent v1gpt-5-nano · low effort",
+      "Baseline v1gpt-5-nano · low effort",
+    ]);
+    const success = within(tables[0]).getByRole("row", {
+      name: /Structural success/,
+    });
     expect(within(success).getAllByRole("cell")).toHaveLength(2);
-    expect(within(tables[0]).getByRole("row", { name: /Average model calls/ }).textContent).toContain("3.0");
+    expect(
+      within(tables[0]).getByRole("row", { name: /Average model calls/ })
+        .textContent,
+    ).toContain("3.0");
   });
 
   it("leaves out the all-runs table when summaries carry no metrics", async () => {
     workspace();
     await screen.findByText(/Agent versus baseline/);
-    expect(screen.queryByRole("region", { name: "All runs compared" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "All runs compared" }),
+    ).toBeNull();
   });
 
   it("refuses a misleading comparison when policy snapshots differ", async () => {
@@ -269,6 +297,51 @@ describe("evaluation dashboard", () => {
     expect(screen.queryByText(/Same test split/)).toBeNull();
   });
 
+  it("matches counterpart reasoning effort instead of the first saved run", async () => {
+    workspace("/eval", false, false, (runs) => {
+      const compatible = runs[1];
+      runs.splice(1, 0, {
+        ...compatible,
+        run_id: "earlier-medium-baseline",
+        settings: { model: "test/gpt-5-nano", reasoning_effort: "medium" },
+      });
+    });
+    const comparison = (
+      await screen.findByRole("heading", { name: "Agent versus baseline" })
+    ).closest("section")!;
+    await within(comparison).findByText(/Same test split/);
+    expect(
+      within(comparison).getAllByRole("columnheader", {
+        name: /Single-pass baseline.*mock-baseline-test.*low effort/,
+      }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(comparison).queryByText("earlier-medium-baseline"),
+    ).toBeNull();
+  });
+
+  it("leaves unknown legacy model settings unpaired and visibly unrecorded", async () => {
+    workspace("/eval", false, false, (runs) => {
+      runs[0].settings = {};
+    });
+    await screen.findByText("No matching comparison run is available.");
+    expect(
+      screen.getByText("Model not recorded · effort not recorded"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Same test split/)).toBeNull();
+  });
+
+  it("shows semantic unsupported replies independently of structural flags", async () => {
+    workspace();
+    const card = (
+      await screen.findByRole("heading", { name: "Unsupported replies" })
+    ).closest<HTMLDivElement>("div.eval-metric-card")!;
+    expect(within(card).getByText("2")).toBeTruthy();
+    expect(within(card).getByText(/12 judged/)).toBeTruthy();
+    expect(within(card).getByText(/Structural flags: 0/)).toBeTruthy();
+    expect(within(card).getByText(/1 contradictions/)).toBeTruthy();
+  });
+
   it("gives a useful recovery action for an invalid evaluation selection", async () => {
     const { user } = workspace("/eval?split=invalid");
     await screen.findByRole("heading", {
@@ -277,8 +350,6 @@ describe("evaluation dashboard", () => {
     await user.click(
       screen.getByRole("button", { name: "Show the default evaluation view" }),
     );
-    expect(
-      await screen.findByText("MOCK DATA · Illustrative benchmark results"),
-    ).toBeTruthy();
+    expect(await screen.findByText("Measured results")).toBeTruthy();
   });
 });

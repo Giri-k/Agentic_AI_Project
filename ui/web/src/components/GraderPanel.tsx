@@ -68,7 +68,6 @@ export function GraderPanel({ ticketId }: { ticketId: string }) {
     running: "Run in progress",
     passed: "Checked fields match",
     failed: "Some checks differ",
-    informational: "Informational test",
   };
   return (
     <section className="panel grader-panel" aria-label="Optional grader view">

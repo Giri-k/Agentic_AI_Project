@@ -8,6 +8,7 @@ Each ticket runs on its own fresh copy of the store (runtime/eval/<run>/<ticket>
 each other's refunds or messages. Results go to results/eval/ (outside runtime/, so Reset never deletes them):
   <run>/rows.jsonl     one scored row per ticket, appended as tickets finish; a rerun skips tickets already there
   <run>/traces/        each ticket's full trace, for failure analysis
+  <run>/manifest.json immutable model/settings, source and policy snapshot for safe cache reuse
   <run>.json           the run in the shape the console's Evaluation page reads (the only file committed)
 
 Scoring uses only the saved result, the store and the trace, the same for both systems. The label's
@@ -28,8 +29,8 @@ from pathlib import Path
 from . import agent as agent_loop
 from . import baseline
 from .agent import CANCEL_CLAIM, REFUND_CLAIM, _amounts_in, _cents_in
-from .config import CHAT_MODEL, DATA, POLICY_DIR, REASONING_EFFORT, REPO, RUNTIME
-from .store import Store, load_jsonl
+from .config import CHAT_MODEL, DATA, EMBED_MODEL, POLICY_DIR, REASONING_EFFORT, REPO, RUNTIME
+from .store import Store, atomic_write, load_jsonl
 from .tools import CARD_NUMBER
 
 RESULTS = REPO / "results" / "eval"
@@ -201,7 +202,8 @@ def score(label, result, state, messages, events, seconds, error=None):
         "expected_status": label["final_status"], "actual_status": status,
         "expected_category": label["category"], "actual_category": category,
         "expected_team": label["team"], "actual_team": team, "passed": passed, "notes": notes,
-        "trace_available": True, **checks, "refund_risk": bool(label.get("refund_risk")),
+        "trace_available": bool(events), "trace_fingerprint": _digest(events),
+        "label_fingerprint": _digest(label), **checks, "refund_risk": bool(label.get("refund_risk")),
         "unauthorized_refund_attempted": attempted, "unauthorized_refund_executed": executed,
         "unsupported_reply": bool(problems), "expected_pause": expected_pause,
         "correct_pause": expected_pause and checks["status_ok"],
@@ -291,16 +293,38 @@ def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def with_judge(rows, judge_path):
+def policy_texts():
+    """The complete versioned policy evidence, captured when an evaluation starts."""
+    return {p.stem: p.read_text() for p in sorted(POLICY_DIR.glob("*.md"))}
+
+
+def policy_snapshot(policies):
+    """Keep the existing public snapshot format, whose keys include .md filenames."""
+    return f"policies-{_digest({f'{pid}.md': text for pid, text in policies.items()})}"
+
+
+def _without_judge(row):
+    """Never carry cached semantic results or notes into another execution or label revision."""
+    return {**{key: value for key, value in row.items() if not key.startswith("judge_")},
+            "notes": [note for note in row["notes"] if not note.startswith("Judge:")]}
+
+
+def with_judge(rows, judge_path, labels, policies):
     """Add the LLM judge's verdicts (agent.judge) to the rows, if that run has been judged. They are reported
     separately and never change "passed", which stays on the deterministic checks."""
-    if not Path(judge_path).exists():
+    rows = [_without_judge(row) for row in rows]
+    if policies is None or not Path(judge_path).exists():
         return rows
+    # A local import avoids a module import cycle: agent.judge uses rescore below.
+    from .judge import judgement_fingerprint
     verdicts = {j["ticket_id"]: j for j in load_jsonl(judge_path)}
     out = []
     for row in rows:
         j = verdicts.get(row["ticket_id"])
-        if j is None:
+        trace = Path(judge_path).parent / "traces" / f"{row['ticket_id']}.jsonl"
+        events = load_jsonl(trace) if trace.exists() else []
+        if (j is None or row.get("trace_fingerprint") != _digest(events)
+                or j.get("fingerprint") != judgement_fingerprint(labels[row["ticket_id"]], events, policies)):
             out.append(row)
             continue
         facts = [f["verdict"] for f in j["facts"]]
@@ -325,18 +349,34 @@ def judge_metrics(rows):
             "judged_replies": len(judged), "judge_errors": sum(bool(r.get("judge_error")) for r in rows)}
 
 
-def build_run(run_id, system, split, rows, labels, model=CHAT_MODEL, judge_path=None, settings=None):
+def build_run(run_id, system, split, rows, labels, model=CHAT_MODEL, judge_path=None, settings=None,
+              execution=None, original=None):
     """The run object the Evaluation page reads (same shape as its illustrative snapshots, plus extra metrics)."""
-    rows = sorted(with_judge(rows, judge_path) if judge_path else rows, key=lambda r: r["ticket_id"])
-    policies = {p.name: p.read_text() for p in sorted(POLICY_DIR.glob("*.md"))}
+    original = original or {}
+    policies = execution["policies"] if execution else policy_texts()
+    snapshot = execution["policy_snapshot"] if execution else (
+        original.get("policy_snapshot") if original else policy_snapshot(policies))
+    # A historical run may have no original policy files. Its deterministic rows can still be rescored,
+    # but semantic verdicts must not be regenerated or attached using a different policy snapshot.
+    judge_policies = policies if policy_snapshot(policies) == snapshot else None
+    rows = sorted(with_judge(rows, judge_path, labels, judge_policies) if judge_path else
+                  [_without_judge(row) for row in rows], key=lambda r: r["ticket_id"])
+    labelled = [labels[row["ticket_id"]] for row in rows]
+    data_snapshot = execution["data_snapshot"] if execution else original.get("data_snapshot")
+    benchmark = {"labels": labelled, "data_snapshot": data_snapshot} if data_snapshot else labelled
     return {
         "run_id": run_id, "system": system, "split": split,
-        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "mock": False, "measured": True,
-        "benchmark_id": f"{split}-{_digest([labels[r['ticket_id']] for r in rows])}",
-        "policy_snapshot": f"policies-{_digest(policies)}", "model": model,
-        "provenance": (f"Measured: {len(rows)} {split} tickets run by the {system} on {model}, each on a fresh "
+        "created_at": original.get("created_at") or (execution or {}).get("created_at")
+                      or datetime.now(timezone.utc).isoformat(timespec="seconds"), "measured": True,
+        "benchmark_id": f"{split}-{_digest(benchmark)}",
+        "policy_snapshot": snapshot, "model": model,
+        **({"data_snapshot": data_snapshot} if data_snapshot else {}),
+        "provenance": (f"Measured: {len(rows)} {split} tickets run by the {system} on {model or 'an unrecorded model'}, each on a fresh "
                        "copy of the store, scored against the labels from the saved result and trace."),
-        "settings": settings or {}, "metrics": {**metrics(rows), **judge_metrics(rows)},
+        "settings": settings or {},
+        **({"execution_fingerprint": execution["fingerprint"]} if execution else
+           {"execution_fingerprint": original["execution_fingerprint"]} if original.get("execution_fingerprint") else {}),
+        "metrics": {**metrics(rows), **judge_metrics(rows)},
         "by_group": _by(rows, "group", "group"),
         "by_end_state": _by(rows, "expected_status", "status"), "tickets": rows,
     }
@@ -360,6 +400,43 @@ def run_settings(system, reasoning_effort=None):
     prompts = agent_loop.PROMPT_VERSIONS if system == "agent" else {"single_pass": baseline.PROMPT_VERSION}
     return {"model": CHAT_MODEL, "reasoning_effort": reasoning_effort or REASONING_EFFORT,
             "prompt_versions": prompts}
+
+
+def execution_manifest(system, split, ticket_ids, reasoning_effort=None):
+    """Immutable inputs for safely resuming a run. Labels are checked on each scored row instead."""
+    policies = policy_texts()
+    package = Path(__file__).parent
+    specification = {
+        "version": 1, "system": system, "split": split, "ticket_ids": sorted(ticket_ids),
+        "settings": run_settings(system, reasoning_effort), "embedding_model": EMBED_MODEL,
+        "policy_snapshot": policy_snapshot(policies), "policies": policies,
+        "data_snapshot": _digest({name: (DATA / name).read_text()
+                                  for name in ("tickets.jsonl", "store.json", "policy_ids.json")}),
+        "implementation_snapshot": _digest({str(path.relative_to(package)): path.read_text()
+                                            for path in sorted([*package.glob("*.py"),
+                                                                *(package / "prompts").glob("*.txt")])}),
+    }
+    return {**specification, "fingerprint": _digest(specification),
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def _invalidate_judge(path, tickets):
+    """Discard verdicts for executions which will be replaced, including infrastructure retries."""
+    if not path.exists():
+        return
+    kept = [row for row in load_jsonl(path) if row["ticket_id"] not in tickets]
+    atomic_write(path, "".join(json.dumps(row) + "\n" for row in kept))
+
+
+def saved_events(out, row):
+    """Read original execution evidence, refusing missing or replaced traces rather than inventing a run."""
+    path = Path(out) / "traces" / f"{row['ticket_id']}.jsonl"
+    if not path.exists() and row.get("trace_available"):
+        raise ValueError(f"Original trace for {row['ticket_id']} is missing; restore it or rerun the evaluation.")
+    events = load_jsonl(path) if path.exists() else []
+    if row.get("trace_fingerprint") and row["trace_fingerprint"] != _digest(events):
+        raise ValueError(f"Original trace for {row['ticket_id']} changed; restore it or rerun the evaluation.")
+    return events
 
 
 INFRA_ERRORS = ("APITimeoutError", "APIConnectionError", "RateLimitError", "InternalServerError")
@@ -386,6 +463,8 @@ def run_one(system, ticket_id, label, work, out, tools):
 def _attempt(system, ticket_id, label, work, out, tools):
     """One fresh run of one ticket; any harness error becomes a failed row."""
     shutil.rmtree(work, ignore_errors=True)
+    saved_trace = out / "traces" / f"{ticket_id}.jsonl"
+    saved_trace.unlink(missing_ok=True)
     store = Store.reset(work)
     start, error, result = time.monotonic(), None, None
     try:
@@ -400,7 +479,7 @@ def _attempt(system, ticket_id, label, work, out, tools):
     trace = work / "traces" / f"{ticket_id}.jsonl"
     events = load_jsonl(trace) if trace.exists() else []
     if trace.exists():
-        shutil.copy(trace, out / "traces" / f"{ticket_id}.jsonl")
+        shutil.copy(trace, saved_trace)
     messages = [m for m in store.data["outbox"] if m["ticket_id"] == ticket_id]
     return score(label, result, state, messages, events, seconds, error), events
 
@@ -412,19 +491,48 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
     out = Path(results) / run_id
     (out / "traces").mkdir(parents=True, exist_ok=True)
     rows_path = out / "rows.jsonl"
+    manifest_path = out / "manifest.json"
+    summary_path = Path(results) / f"{run_id}.json"
+    requested = execution_manifest(system, split, ticket_ids, reasoning_effort)
+    execution = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
+    if not redo and (rows_path.exists() or summary_path.exists() or execution):
+        if execution is None:
+            raise ValueError(f"{run_id} has no execution manifest; use a new --tag or --redo. "
+                             "Historical summary files cannot establish safe cache reuse.")
+        if execution.get("fingerprint") != requested["fingerprint"]:
+            raise ValueError(f"{run_id} inputs, policies, model, prompts or settings changed; "
+                             "use a new --tag or --redo instead of mixing executions.")
     if redo:
         rows_path.unlink(missing_ok=True)
+        (out / "judge.jsonl").unlink(missing_ok=True)
+        for trace in (out / "traces").glob("*.jsonl"):
+            trace.unlink()
+    if execution is None or redo:
+        execution = requested
+        atomic_write(manifest_path, json.dumps(execution, indent=1))
     saved = load_jsonl(rows_path) if rows_path.exists() else []
+    for row in saved:
+        ticket = row["ticket_id"]
+        if ticket not in labels or row.get("label_fingerprint") != _digest(labels[ticket]):
+            raise ValueError(f"{run_id} labels changed for {ticket}; run --rescore before resuming, "
+                             "or use a new --tag or --redo.")
+        events = saved_events(out, row)
+        if row.get("trace_fingerprint") != _digest(events):
+            raise ValueError(f"{run_id} trace for {ticket} is missing or changed; restore its original trace "
+                             "or use a new --tag or --redo.")
     done = {r["ticket_id"]: r for r in saved
             if not infra_failure(r, load_jsonl(out / "traces" / f"{r['ticket_id']}.jsonl")
                                  if (out / "traces" / f"{r['ticket_id']}.jsonl").exists() else [])}
     if len(done) < len(saved):  # rows lost to API failures are run again
         rows_path.write_text("".join(json.dumps(r) + "\n" for r in done.values()))
     todo = [t for t in ticket_ids if t not in done]
+    _invalidate_judge(out / "judge.jsonl", set(todo))
     print(f"{run_id}: {len(ticket_ids)} tickets, {len(done)} already scored, {len(todo)} to run")
 
     local = _Worker()
     make = tools or (lambda: _default_tools(reasoning_effort))
+    if tools is None and todo:
+        _default_tools(reasoning_effort)  # build the embedding cache once, after cache validation
 
     def thread_tools():
         if local.llm is None:
@@ -446,8 +554,9 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
                   f"({row['seconds']}s, {row['model_calls']} model calls)" + (f" {row['error']}" if row["error"] else ""))
 
     run = build_run(run_id, system, split, [done[t] for t in ticket_ids if t in done], labels,
-                    judge_path=out / "judge.jsonl", settings=run_settings(system, reasoning_effort))
-    (Path(results) / f"{run_id}.json").write_text(json.dumps(run, indent=1))
+                    judge_path=out / "judge.jsonl", settings=execution["settings"],
+                    model=execution["settings"]["model"], execution=execution)
+    atomic_write(summary_path, json.dumps(run, indent=1))
     return run
 
 
@@ -475,13 +584,19 @@ def rescore(run_id, labels, results=RESULTS):
     """Rescore a finished run against the current labels and rewrite its rows and run file."""
     out = Path(results) / run_id
     old = json.loads((Path(results) / f"{run_id}.json").read_text())
-    rows = [rescore_row(r, labels[r["ticket_id"]], load_jsonl(out / "traces" / f"{r['ticket_id']}.jsonl"))
+    if not (out / "rows.jsonl").exists():
+        raise ValueError(f"{run_id} is a summary-only historical run; restore its original rows and traces before rescoring.")
+    manifest = out / "manifest.json"
+    execution = json.loads(manifest.read_text()) if manifest.exists() else None
+    if execution and old.get("execution_fingerprint") != execution["fingerprint"]:
+        raise ValueError("The execution changed or has not finished; complete the evaluation before rescoring it.")
+    rows = [rescore_row(r, labels[r["ticket_id"]], saved_events(out, r))
             for r in load_jsonl(out / "rows.jsonl")]
-    (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    run = build_run(run_id, old["system"], old["split"], rows, labels, model=old.get("model", CHAT_MODEL),
-                    judge_path=out / "judge.jsonl", settings=old.get("settings"))
+    atomic_write(out / "rows.jsonl", "".join(json.dumps(r) + "\n" for r in rows))
+    run = build_run(run_id, old["system"], old["split"], rows, labels, model=old.get("model"),
+                    judge_path=out / "judge.jsonl", settings=old.get("settings"), execution=execution, original=old)
     run["provenance"] += " Rescored from the saved traces against the current labels."
-    (Path(results) / f"{run_id}.json").write_text(json.dumps(run, indent=1))
+    atomic_write(Path(results) / f"{run_id}.json", json.dumps(run, indent=1))
     return run
 
 
@@ -516,7 +631,7 @@ def main(argv=None):
     parser.add_argument("--redo", action="store_true", help="discard this run's saved rows and start again")
     parser.add_argument("--tag", help="suffix for the run ID, e.g. a prompt version")
     parser.add_argument("--reasoning-effort", choices=["minimal", "low", "medium", "high"],
-                        help="the model's reasoning effort (default: the model's own, medium for gpt-5-nano)")
+                        help=f"the model's reasoning effort (default: {REASONING_EFFORT})")
     parser.add_argument("--rescore", action="store_true",
                         help="score finished runs again against the current labels (no model calls)")
     args = parser.parse_args(argv)
@@ -527,8 +642,6 @@ def main(argv=None):
         ids = [t.strip() for t in args.tickets.split(",") if t.strip() in labels]
     if args.limit:
         ids = ids[: args.limit]
-    if not args.rescore:
-        _default_tools(args.reasoning_effort)  # build the embedding cache once before threads start
     runs = []
     for system in [s.strip() for s in args.systems.split(",")]:
         if system not in SYSTEMS:

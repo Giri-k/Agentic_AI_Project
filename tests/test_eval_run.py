@@ -1,6 +1,7 @@
 """The evaluation runner: scoring rules on hand-made traces, and a full scripted run on a temp store (no network)."""
 
 import json
+import pytest
 
 from agent import eval_run
 from agent.agent import Classification, Finish, ReplyCheck, Step
@@ -106,7 +107,7 @@ def test_full_scripted_run_scores_the_ticket_and_writes_the_dashboard_run(tmp_pa
     assert row["actual_status"] == "awaiting_approval" and row["actual_team"] == "Returns"
     assert row["correct_pause"] and not row["unauthorized_refund_attempted"] and not row["unsupported_reply"]
     assert row["model_calls"] == 4 and row["tool_calls"] == 4 and row["citation_matched"] == 1
-    assert run["mock"] is False and run["measured"] is True
+    assert run["measured"] is True and "mock" not in run
     assert run["metrics"]["success_rate"] == 1.0 and run["metrics"]["expected_pauses"] == 1
     saved = json.loads((tmp_path / "results" / "agent-demo.json").read_text())
     assert saved["tickets"][0]["ticket_id"] == "T-0039"
@@ -165,3 +166,138 @@ def test_a_ticket_lost_to_an_api_timeout_is_run_again_not_scored(tmp_path):
     row = run["tickets"][0]
     # The first attempt ended failed_safe on the timeout; the second (same client, now healthy) is the one scored.
     assert row["attempts"] == 2 and row["actual_status"] == "awaiting_approval" and row["passed"]
+
+
+def demo_run(tmp_path, **kwargs):
+    return eval_run.evaluate("agent", "demo", ["T-0039"], kwargs.pop("labels", LABELS), workers=1,
+                             run_id="agent-demo", tools=kwargs.pop("tools", lambda: (pause_script(), retriever)),
+                             results=tmp_path / "results", runtime=tmp_path / "runtime", **kwargs)
+
+
+def test_cached_run_refuses_a_different_reasoning_effort_before_constructing_clients(tmp_path):
+    demo_run(tmp_path, reasoning_effort="low")
+    original = (tmp_path / "results" / "agent-demo.json").read_text()
+    with pytest.raises(ValueError, match="settings changed"):
+        demo_run(tmp_path, reasoning_effort="high", tools=lambda: pytest.fail("must not construct clients"))
+    assert (tmp_path / "results" / "agent-demo.json").read_text() == original
+
+
+def test_cached_run_refuses_changed_labels_instead_of_relabelling_old_scores(tmp_path):
+    demo_run(tmp_path)
+    changed = {**LABELS, "T-0039": {**LABELS["T-0039"], "final_status": "escalated"}}
+    with pytest.raises(ValueError, match="labels changed.*--rescore"):
+        demo_run(tmp_path, labels=changed)
+
+
+def test_cached_run_refuses_policy_changes(tmp_path, monkeypatch):
+    demo_run(tmp_path)
+    policies = eval_run.policy_texts()
+    policies["POL-RET-02"] += "\nChanged approval policy.\n"
+    monkeypatch.setattr(eval_run, "policy_texts", lambda: policies)
+    with pytest.raises(ValueError, match="policies.*changed"):
+        demo_run(tmp_path)
+
+
+def test_cached_run_refuses_changed_source_records(tmp_path, monkeypatch):
+    original = demo_run(tmp_path)
+    changed = tmp_path / "changed-data"
+    changed.mkdir()
+    for name in ("store.json", "tickets.jsonl", "policy_ids.json"):
+        (changed / name).write_text((DATA / name).read_text())
+    (changed / "store.json").write_text((changed / "store.json").read_text() + "\n")
+    monkeypatch.setattr(eval_run, "DATA", changed)
+    with pytest.raises(ValueError, match="inputs.*changed"):
+        demo_run(tmp_path)
+    # The same labels over different input records must not advertise the same benchmark identity.
+    replacement = demo_run(tmp_path, redo=True)
+    assert replacement["benchmark_id"] != original["benchmark_id"]
+
+
+def test_legacy_summary_cannot_be_silently_overwritten_or_used_as_a_cache(tmp_path):
+    demo_run(tmp_path)
+    (tmp_path / "results" / "agent-demo" / "manifest.json").unlink()
+    with pytest.raises(ValueError, match="no execution manifest"):
+        demo_run(tmp_path)
+
+
+def test_redo_discards_judge_verdicts_and_does_not_reuse_a_previous_trace(tmp_path):
+    demo_run(tmp_path)
+    out = tmp_path / "results" / "agent-demo"
+    (out / "judge.jsonl").write_text(json.dumps({"ticket_id": "T-0039", "error": None}) + "\n")
+
+    def unavailable():
+        raise RuntimeError("client unavailable")
+
+    run = demo_run(tmp_path, redo=True, tools=unavailable)
+    assert run["tickets"][0]["actual_status"] is None
+    assert not run["tickets"][0]["trace_available"]
+    assert not (out / "traces" / "T-0039.jsonl").exists()
+    assert not (out / "judge.jsonl").exists()
+    assert "judge_unsupported_replies" not in run["metrics"]
+
+
+def test_a_cached_infrastructure_failure_invalidates_its_judge_verdict_before_retry(tmp_path):
+    class Unavailable:
+        model, last_usage = "fake", None
+
+        def parse(self, messages, schema):
+            raise type("APITimeoutError", (Exception,), {})("timeout")
+
+    first = demo_run(tmp_path, tools=lambda: (Unavailable(), retriever))
+    assert first["tickets"][0]["actual_status"] == "failed_safe"
+    out = tmp_path / "results" / "agent-demo"
+    (out / "judge.jsonl").write_text(json.dumps({"ticket_id": "T-0039", "error": None}) + "\n")
+    run = demo_run(tmp_path)
+    assert run["tickets"][0]["passed"]
+    assert (out / "judge.jsonl").read_text() == ""
+    assert "judge_unsupported_replies" not in run["metrics"]
+
+
+def test_rescore_preserves_original_policy_snapshot_settings_and_creation_time(tmp_path, monkeypatch):
+    original = demo_run(tmp_path, reasoning_effort="medium")
+    # Historical trace bundles may predate manifests; rescoring labels still cannot change their policies.
+    (tmp_path / "results" / "agent-demo" / "manifest.json").unlink()
+    policies = eval_run.policy_texts()
+    policies["POL-RET-02"] += "\nA later policy revision.\n"
+    monkeypatch.setattr(eval_run, "policy_texts", lambda: policies)
+    changed = {**LABELS, "T-0039": {**LABELS["T-0039"], "final_status": "escalated"}}
+    rescored = eval_run.rescore("agent-demo", changed, results=tmp_path / "results")
+    assert rescored["policy_snapshot"] == original["policy_snapshot"]
+    assert rescored["settings"] == original["settings"]
+    assert rescored["created_at"] == original["created_at"]
+    assert rescored["benchmark_id"] != original["benchmark_id"]
+    assert not rescored["tickets"][0]["status_ok"]
+
+
+def test_modified_trace_is_refused_by_both_cache_reuse_and_rescoring(tmp_path):
+    demo_run(tmp_path)
+    path = tmp_path / "results" / "agent-demo" / "traces" / "T-0039.jsonl"
+    with path.open("a") as file:
+        file.write(json.dumps(ev("changed_evidence")) + "\n")
+    with pytest.raises(ValueError, match="trace.*changed"):
+        demo_run(tmp_path)
+    with pytest.raises(ValueError, match="trace.*changed"):
+        eval_run.rescore("agent-demo", LABELS, results=tmp_path / "results")
+
+
+def test_summary_only_historical_run_cannot_be_rescored_without_original_evidence(tmp_path):
+    demo_run(tmp_path)
+    summary = tmp_path / "results" / "agent-demo.json"
+    original = summary.read_text()
+    (tmp_path / "results" / "agent-demo" / "rows.jsonl").unlink()
+    with pytest.raises(ValueError, match="summary-only historical run"):
+        eval_run.rescore("agent-demo", LABELS, results=tmp_path / "results")
+    assert summary.read_text() == original
+
+
+def test_rescore_does_not_invent_missing_historical_model_or_policy_metadata(tmp_path):
+    demo_run(tmp_path)
+    summary = tmp_path / "results" / "agent-demo.json"
+    old = json.loads(summary.read_text())
+    for key in ("model", "policy_snapshot", "settings"):
+        del old[key]
+    summary.write_text(json.dumps(old))
+    (tmp_path / "results" / "agent-demo" / "manifest.json").unlink()
+    rescored = eval_run.rescore("agent-demo", LABELS, results=tmp_path / "results")
+    assert rescored["model"] is None and rescored["policy_snapshot"] is None
+    assert rescored["settings"] == {}
