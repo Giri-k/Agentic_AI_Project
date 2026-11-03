@@ -259,6 +259,13 @@ export interface EvalRunSummary {
   provenance?: string;
   benchmark_id?: string;
   policy_snapshot?: string;
+  tickets?: number | EvalRun["tickets"];
+  metrics?: EvalRun["metrics"];
+  settings?: {
+    model?: string;
+    reasoning_effort?: string;
+    prompt_versions?: Record<string, string>;
+  };
 }
 export interface EvalRun extends EvalRunSummary {
   metrics: {

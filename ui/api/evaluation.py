@@ -104,9 +104,10 @@ def build_eval_runs(labels: dict[str, dict[str, Any]], splits: dict[str, str],
 
 
 def eval_summaries(runs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep comparison provenance available before downloading full per-ticket rows."""
+    """Provenance and headline metrics for every run, without the per-ticket rows (for the all-runs table)."""
     fields = ("run_id", "system", "split", "created_at", "mock", "measured", "benchmark_id", "policy_snapshot", "provenance")
-    return [{**{key: run[key] for key in fields}, "tickets": len(run["tickets"])} for run in runs.values()]
+    return [{**{key: run[key] for key in fields}, "tickets": len(run["tickets"]), "metrics": run["metrics"],
+             "settings": run.get("settings", {})} for run in runs.values()]
 
 
 def build_retrieval_metrics(labels: dict[str, dict[str, Any]], splits: dict[str, str],
