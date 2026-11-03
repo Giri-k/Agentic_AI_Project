@@ -12,6 +12,7 @@ for what was actually saved.
 """
 
 import json
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -82,15 +83,16 @@ def _single_pass(store, d, trace, ticket_id, llm, progress):
                                                         "policy_passages": passages, "policy_search": note})}]
 
     d.budget.model_calls += 1
+    start = time.monotonic()
     try:
         out = llm.parse(messages, BaselineOutput)
         if not isinstance(out, BaselineOutput):
             raise ValueError("model output is not a BaselineOutput")
     except Exception as e:  # no repair attempt: failed_safe is counted in the metrics, not hidden
         reason = "baseline_invalid_output" if isinstance(e, (ValidationError, ValueError)) else "baseline_model_error"
-        _log_model_call(trace, llm, passages, ok=False, error=type(e).__name__)
+        _log_model_call(trace, llm, passages, start, ok=False, error=type(e).__name__)
         return _failed(d, store, ticket_id, DEFAULT_CATEGORY, reason)
-    _log_model_call(trace, llm, passages, ok=True, n_actions=len(out.intended_actions))
+    _log_model_call(trace, llm, passages, start, ok=True, n_actions=len(out.intended_actions))
     progress["category"] = out.category
 
     receipts = _run_actions(d, ticket_id, out)
@@ -164,9 +166,10 @@ def _failed(d, store, ticket_id, category, reason):
                         unresolved_requirements=[f"staff recovery: {reason}"], stop_reason=reason)
 
 
-def _log_model_call(trace, llm, passages, **fields):
-    """Trace the one model call: prompt version, model, which policies it saw, token usage if the client reports it."""
+def _log_model_call(trace, llm, passages, start, **fields):
+    """Trace the one model call: prompt version, model, which policies it saw, token usage and latency."""
     ids = [p.get("source_id") or p.get("policy_id") or p.get("id") for p in passages if isinstance(p, dict)]
     usage = getattr(llm, "last_usage", None)
     trace.log("model_call", system="baseline", prompt_version=PROMPT_VERSION, model=getattr(llm, "model", CHAT_MODEL),
-              passage_ids=ids, usage=usage.model_dump() if hasattr(usage, "model_dump") else None, **fields)
+              passage_ids=ids, usage=usage.model_dump() if hasattr(usage, "model_dump") else None,
+              latency_ms=round((time.monotonic() - start) * 1000), **fields)

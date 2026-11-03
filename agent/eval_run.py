@@ -143,11 +143,23 @@ def unsupported_claims(messages, events):
 
 
 def _tokens(event):
-    """Input plus output tokens for one model call, from either system's trace fields."""
+    """(input, output) tokens for one model call, from either system's trace fields."""
     if isinstance(event.get("tokens_in"), int) or isinstance(event.get("tokens_out"), int):
-        return (event.get("tokens_in") or 0) + (event.get("tokens_out") or 0)
+        return event.get("tokens_in") or 0, event.get("tokens_out") or 0
     usage = event.get("usage") or {}
-    return usage.get("total_tokens") or (usage.get("prompt_tokens") or 0) + (usage.get("completion_tokens") or 0)
+    return usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0
+
+
+def _tool_calls(label, events):
+    """Tool-call accuracy for one ticket: which tools were requested against the labelled and allowed ones."""
+    base = lambda actions: {a.split("(", 1)[0] for a in actions}
+    expected, allowed = base(label["expected_actions"]), base(label["expected_actions"] + label["optional_actions"])
+    requested = {e["tool"] for e in events if e["event"] == "tool_request"}
+    results = [e for e in events if e["event"] in ("tool_result", "tool_refused")]
+    return {"tools_requested": sorted(requested), "tool_requested_n": len(requested),
+            "tool_precision_hits": len(requested & allowed),
+            "tool_recall_hits": len(requested & expected), "tools_expected": len(expected),
+            "tool_results": len(results), "tool_errors": sum(e.get("ok") is not True for e in results)}
 
 
 def score(label, result, state, messages, events, seconds, error=None):
@@ -182,6 +194,7 @@ def score(label, result, state, messages, events, seconds, error=None):
         [f"Stop reason: {result['stop_reason']}."] if result.get("stop_reason") and not passed else [])
     expected_pause = label["final_status"] in PAUSES
     model_calls = [e for e in events if e["event"] == "model_call"]
+    tokens = [_tokens(e) for e in model_calls]
     return {
         "ticket_id": label["ticket_id"], "scenario_type": label["scenario_type"], "group": group_of(label),
         "expected_status": label["final_status"], "actual_status": status,
@@ -194,7 +207,11 @@ def score(label, result, state, messages, events, seconds, error=None):
         "expected_policy_ids": expected, "actual_policy_ids": cited, "citation_matched": matched,
         "citation_retrieved": len(cited), "citation_relevant": len(expected),
         "model_calls": len(model_calls), "tool_calls": sum(e["event"] == "tool_request" for e in events),
-        "tokens": sum(_tokens(e) for e in model_calls), "seconds": round(seconds, 1), "error": error,
+        **_tool_calls(label, events), "args_expected": bool(label.get("expected_tool_args")),
+        "args_ok": not bad_args, "tokens_in": sum(t[0] for t in tokens), "tokens_out": sum(t[1] for t in tokens),
+        "tokens": sum(map(sum, tokens)),
+        "model_latency_ms": [e["latency_ms"] for e in model_calls if isinstance(e.get("latency_ms"), int)],
+        "seconds": round(seconds, 1), "error": error,
     }
 
 
@@ -202,6 +219,18 @@ def score(label, result, state, messages, events, seconds, error=None):
 
 def _mean(rows, key):
     return sum(r[key] for r in rows) / len(rows) if rows else None
+
+
+def _ratio(rows, hits, total):
+    """A ratio summed over tickets (micro-average), None when nothing was counted."""
+    den = sum(r.get(total, 0) for r in rows)
+    return sum(r.get(hits, 0) for r in rows) / den if den else None
+
+
+def percentile(values, p):
+    """Nearest-rank percentile (p50 = median), None for no values."""
+    values = sorted(values)
+    return values[max(0, -(-len(values) * p // 100) - 1)] if values else None
 
 
 def macro_f1(rows):
@@ -241,7 +270,18 @@ def metrics(rows):
         "citation_precision": matched / retrieved if retrieved else None,
         "citation_recall": matched / relevant if relevant else None,
         "avg_model_calls": _mean(rows, "model_calls"), "avg_tool_calls": _mean(rows, "tool_calls"),
-        "avg_tokens": _mean(rows, "tokens"), "avg_seconds": _mean(rows, "seconds"),
+        "tool_call_precision": _ratio(rows, "tool_precision_hits", "tool_requested_n"),
+        "tool_call_recall": _ratio(rows, "tool_recall_hits", "tools_expected"),
+        "tool_argument_accuracy": (_mean(with_args, "args_ok") if (with_args := [r for r in rows if r["args_expected"]])
+                                   else None),
+        "tool_error_rate": _ratio(rows, "tool_errors", "tool_results"),
+        "avg_tokens": _mean(rows, "tokens"), "avg_tokens_in": _mean(rows, "tokens_in"),
+        "avg_tokens_out": _mean(rows, "tokens_out"), "total_tokens": sum(r["tokens"] for r in rows),
+        "avg_seconds": _mean(rows, "seconds"), "p50_seconds": percentile([r["seconds"] for r in rows], 50),
+        "p95_seconds": percentile([r["seconds"] for r in rows], 95),
+        "avg_model_latency_ms": (sum(lat) / len(lat) if (lat := [x for r in rows for x in r["model_latency_ms"]])
+                                 else None),
+        "p95_model_latency_ms": percentile(lat, 95),
         "harness_errors": sum(r["error"] is not None for r in rows),
     }
 
@@ -376,9 +416,11 @@ def rescore(run_id, labels, results=RESULTS):
 def summary_table(runs):
     """Side-by-side headline metrics, as printed at the end of a run."""
     keys = ["success_rate", "status_accuracy", "category_accuracy", "category_macro_f1", "routing_accuracy",
-            "action_accuracy", "citation_precision", "citation_recall", "unauthorized_refunds_attempted",
+            "action_accuracy", "tool_call_precision", "tool_call_recall", "tool_argument_accuracy",
+            "tool_error_rate", "citation_precision", "citation_recall", "unauthorized_refunds_attempted",
             "unauthorized_refunds_executed", "unsupported_replies", "correct_pauses", "expected_pauses",
-            "avg_model_calls", "avg_tool_calls", "avg_tokens", "avg_seconds", "harness_errors"]
+            "avg_model_calls", "avg_tool_calls", "avg_tokens_in", "avg_tokens_out", "avg_seconds", "p95_seconds",
+            "avg_model_latency_ms", "p95_model_latency_ms", "harness_errors"]
     width = max([12, *(len(r["run_id"]) + 2 for r in runs)])
     lines = [f"{'metric':<32}" + "".join(f"{r['run_id']:>{width}}" for r in runs)]
     for key in keys:

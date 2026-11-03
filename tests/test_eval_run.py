@@ -133,3 +133,20 @@ def test_a_harness_error_becomes_a_failed_row_and_the_run_continues(tmp_path):
     row = run["tickets"][0]
     assert not row["passed"] and "PORTKEY_API_KEY" in row["error"]
     assert run["metrics"]["harness_errors"] == 1
+
+
+def test_tool_call_accuracy_counts_unexpected_and_missing_tools():
+    label = LABELS["T-0039"]  # expected ticket_get, kb_lookup, ticket_update; send_message optional
+    events = [ev("tool_request", call_id=str(n), tool=t) for n, t in
+              enumerate(["ticket_get", "kb_lookup", "send_message", "process_refund"])]
+    events.append(ev("tool_result", call_id="3", tool="process_refund", ok=False, error={"code": "NOT_ELIGIBLE"}))
+    out = eval_run._tool_calls(label, events)
+    assert out["tool_requested_n"] == 4 and out["tool_precision_hits"] == 3  # process_refund is not allowed
+    assert out["tools_expected"] == 3 and out["tool_recall_hits"] == 2      # ticket_update never called
+    assert out["tool_errors"] == 1 and out["tool_results"] == 1
+
+
+def test_percentile_is_nearest_rank():
+    assert eval_run.percentile([5, 1, 3, 2, 4], 50) == 3
+    assert eval_run.percentile(list(range(1, 101)), 95) == 95
+    assert eval_run.percentile([], 95) is None
