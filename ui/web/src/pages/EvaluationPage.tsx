@@ -21,7 +21,7 @@ import {
 import { useEvalRun, useEvalRuns, useRetrievalMetrics } from "../api";
 import { EmptyState, StatusBadge } from "../components";
 import { date, humanize } from "../format";
-import type { EvalRun } from "../types";
+import type { EvalRun, EvalRunSummary } from "../types";
 
 // Missing measurements remain visibly missing rather than becoming zeros or fabricated cost estimates.
 function numeric(value: number | null | undefined, digits = 0): string {
@@ -83,6 +83,133 @@ function comparisonIssue(selected: EvalRun, other: EvalRun): string | null {
 }
 
 // Comparison tables retain distinct safety counts and nullable execution-cost measurements.
+type Measured = Pick<EvalRun, "metrics">;
+type MetricRow = {
+  label: string;
+  value: (run: Measured) => string;
+  safety?: boolean;
+};
+
+// One list of metrics for both tables, so the agent-versus-baseline view and the all-runs view always agree.
+const METRIC_ROWS: MetricRow[] = [
+  {
+    label: "Overall success",
+    value: (run: Measured) => percentage(run.metrics.success_rate),
+  },
+  {
+    label: "Final-status accuracy",
+    value: (run: Measured) => percentage(run.metrics.status_accuracy),
+  },
+  {
+    label: "Category accuracy",
+    value: (run: Measured) => percentage(run.metrics.category_accuracy),
+  },
+  {
+    label: "Category macro-F1",
+    value: (run: Measured) => numeric(run.metrics.category_macro_f1, 3),
+  },
+  {
+    label: "Routing accuracy",
+    value: (run: Measured) => percentage(run.metrics.routing_accuracy),
+  },
+  {
+    label: "Expected actions and arguments",
+    value: (run: Measured) => percentage(run.metrics.action_accuracy),
+  },
+  {
+    label: "Tool-call precision / recall",
+    value: (run: Measured) =>
+      `${percentage(run.metrics.tool_call_precision)} / ${percentage(run.metrics.tool_call_recall)}`,
+  },
+  {
+    label: "Tool argument accuracy",
+    value: (run: Measured) => percentage(run.metrics.tool_argument_accuracy),
+  },
+  {
+    label: "Tool error rate",
+    value: (run: Measured) => percentage(run.metrics.tool_error_rate),
+  },
+  {
+    label: "Judge: expected facts stated",
+    value: (run: Measured) => percentage(run.metrics.judge_fact_coverage),
+  },
+  {
+    label: "Judge: replies contradicting a fact",
+    value: (run: Measured) => numeric(run.metrics.judge_contradicted_replies),
+  },
+  {
+    label: "Judge: replies with unsupported claims",
+    value: (run: Measured) => numeric(run.metrics.judge_unsupported_replies),
+  },
+  {
+    label: "Unauthorized refunds attempted",
+    value: (run: Measured) =>
+      numeric(run.metrics.unauthorized_refunds_attempted),
+  },
+  {
+    label: "Unauthorized refunds executed",
+    value: (run: Measured) =>
+      numeric(run.metrics.unauthorized_refunds_executed),
+    safety: true,
+  },
+  {
+    label: "Unsupported replies",
+    value: (run: Measured) => numeric(run.metrics.unsupported_replies),
+  },
+  {
+    label: "Correct pauses / expected pauses",
+    value: (run: Measured) =>
+      `${numeric(run.metrics.correct_pauses)} / ${numeric(run.metrics.expected_pauses)}`,
+  },
+  {
+    label: "Citation precision",
+    value: (run: Measured) => percentage(run.metrics.citation_precision),
+  },
+  {
+    label: "Citation recall",
+    value: (run: Measured) => percentage(run.metrics.citation_recall),
+  },
+  {
+    label: "Average model calls",
+    value: (run: Measured) => numeric(run.metrics.avg_model_calls, 1),
+  },
+  {
+    label: "Average tool calls",
+    value: (run: Measured) => numeric(run.metrics.avg_tool_calls, 1),
+  },
+  {
+    label: "Average tokens",
+    value: (run: Measured) => numeric(run.metrics.avg_tokens),
+  },
+  {
+    label: "Average input / output tokens",
+    value: (run: Measured) =>
+      `${numeric(run.metrics.avg_tokens_in)} / ${numeric(run.metrics.avg_tokens_out)}`,
+  },
+  {
+    label: "Average seconds per ticket",
+    value: (run: Measured) =>
+      run.metrics.avg_seconds === null ||
+      run.metrics.avg_seconds === undefined
+        ? "Not measured"
+        : `${numeric(run.metrics.avg_seconds, 1)} s`,
+  },
+  {
+    label: "95th-percentile seconds per ticket",
+    value: (run: Measured) =>
+      typeof run.metrics.p95_seconds === "number"
+        ? `${numeric(run.metrics.p95_seconds, 1)} s`
+        : "Not measured",
+  },
+  {
+    label: "Model-call latency (average / 95th percentile)",
+    value: (run: Measured) =>
+      typeof run.metrics.avg_model_latency_ms === "number"
+        ? `${numeric(run.metrics.avg_model_latency_ms / 1000, 1)} s / ${numeric((run.metrics.p95_model_latency_ms ?? 0) / 1000, 1)} s`
+        : "Not measured",
+  },
+];
+
 function ComparisonTable({
   selected,
   counterpart,
@@ -101,124 +228,7 @@ function ComparisonTable({
     );
   const agent = selected.system === "agent" ? selected : counterpart;
   const baseline = selected.system === "baseline" ? selected : counterpart;
-  const rows = [
-    {
-      label: "Overall success",
-      value: (run: EvalRun) => percentage(run.metrics.success_rate),
-    },
-    {
-      label: "Final-status accuracy",
-      value: (run: EvalRun) => percentage(run.metrics.status_accuracy),
-    },
-    {
-      label: "Category accuracy",
-      value: (run: EvalRun) => percentage(run.metrics.category_accuracy),
-    },
-    {
-      label: "Category macro-F1",
-      value: (run: EvalRun) => numeric(run.metrics.category_macro_f1, 3),
-    },
-    {
-      label: "Routing accuracy",
-      value: (run: EvalRun) => percentage(run.metrics.routing_accuracy),
-    },
-    {
-      label: "Expected actions and arguments",
-      value: (run: EvalRun) => percentage(run.metrics.action_accuracy),
-    },
-    {
-      label: "Tool-call precision / recall",
-      value: (run: EvalRun) =>
-        `${percentage(run.metrics.tool_call_precision)} / ${percentage(run.metrics.tool_call_recall)}`,
-    },
-    {
-      label: "Tool argument accuracy",
-      value: (run: EvalRun) => percentage(run.metrics.tool_argument_accuracy),
-    },
-    {
-      label: "Tool error rate",
-      value: (run: EvalRun) => percentage(run.metrics.tool_error_rate),
-    },
-    {
-      label: "Judge: expected facts stated",
-      value: (run: EvalRun) => percentage(run.metrics.judge_fact_coverage),
-    },
-    {
-      label: "Judge: replies contradicting a fact",
-      value: (run: EvalRun) => numeric(run.metrics.judge_contradicted_replies),
-    },
-    {
-      label: "Judge: replies with unsupported claims",
-      value: (run: EvalRun) => numeric(run.metrics.judge_unsupported_replies),
-    },
-    {
-      label: "Unauthorized refunds attempted",
-      value: (run: EvalRun) =>
-        numeric(run.metrics.unauthorized_refunds_attempted),
-    },
-    {
-      label: "Unauthorized refunds executed",
-      value: (run: EvalRun) =>
-        numeric(run.metrics.unauthorized_refunds_executed),
-      safety: true,
-    },
-    {
-      label: "Unsupported replies",
-      value: (run: EvalRun) => numeric(run.metrics.unsupported_replies),
-    },
-    {
-      label: "Correct pauses / expected pauses",
-      value: (run: EvalRun) =>
-        `${numeric(run.metrics.correct_pauses)} / ${numeric(run.metrics.expected_pauses)}`,
-    },
-    {
-      label: "Citation precision",
-      value: (run: EvalRun) => percentage(run.metrics.citation_precision),
-    },
-    {
-      label: "Citation recall",
-      value: (run: EvalRun) => percentage(run.metrics.citation_recall),
-    },
-    {
-      label: "Average model calls",
-      value: (run: EvalRun) => numeric(run.metrics.avg_model_calls, 1),
-    },
-    {
-      label: "Average tool calls",
-      value: (run: EvalRun) => numeric(run.metrics.avg_tool_calls, 1),
-    },
-    {
-      label: "Average tokens",
-      value: (run: EvalRun) => numeric(run.metrics.avg_tokens),
-    },
-    {
-      label: "Average input / output tokens",
-      value: (run: EvalRun) =>
-        `${numeric(run.metrics.avg_tokens_in)} / ${numeric(run.metrics.avg_tokens_out)}`,
-    },
-    {
-      label: "Average seconds per ticket",
-      value: (run: EvalRun) =>
-        run.metrics.avg_seconds === null ||
-        run.metrics.avg_seconds === undefined
-          ? "Not measured"
-          : `${numeric(run.metrics.avg_seconds, 1)} s`,
-    },
-    {
-      label: "95th-percentile seconds per ticket",
-      value: (run: EvalRun) =>
-        typeof run.metrics.p95_seconds === "number"
-          ? `${numeric(run.metrics.p95_seconds, 1)} s`
-          : "Not measured",
-    },
-    {
-      label: "Model-call latency (average / 95th percentile)",
-      value: (run: EvalRun) =>
-        typeof run.metrics.avg_model_latency_ms === "number"
-          ? `${numeric(run.metrics.avg_model_latency_ms / 1000, 1)} s / ${numeric((run.metrics.p95_model_latency_ms ?? 0) / 1000, 1)} s`
-          : "Not measured",
-    },
-  ];
+  const rows = METRIC_ROWS;
   const table = (metrics: typeof rows) => (
     <div className="eval-table-scroll">
       <table className="eval-table eval-comparison-table">
@@ -621,6 +631,76 @@ function TicketResults({ run }: { run: EvalRun }) {
   );
 }
 
+// "agent-test-v2" -> "v2"; runs saved before tags existed (agent-test, baseline-test) are the first version.
+function runVersion(summary: EvalRunSummary): string {
+  const tag = summary.run_id.split(`-${summary.split}`)[1]?.replace(/^-/, "");
+  return (tag || "v1").split("-")[0];
+}
+
+// Runs saved before the effort was configurable ran at the model's default, which is medium.
+const effortOf = (run: EvalRunSummary) =>
+  (run.settings?.reasoning_effort ?? "medium").replace("default (medium)", "medium");
+
+// Every measured run side by side: one column per run, one row per metric, test and dev split apart.
+function AllRunsTable({ runs }: { runs: EvalRunSummary[] }) {
+  const measured = runs.filter((run) => run.metrics);
+  if (!measured.length) return null;
+  const order = (run: EvalRunSummary) =>
+    `${run.system === "agent" ? 0 : 1}-${runVersion(run)}-${["low", "medium", "high"].indexOf(effortOf(run))}`;
+  const splits = (["test", "dev"] as const)
+    .map((split) => ({
+      split,
+      runs: measured
+        .filter((run) => run.split === split)
+        .sort((a, b) => order(a).localeCompare(order(b))),
+    }))
+    .filter((group) => group.runs.length);
+  return (
+    <section className="panel eval-comparison-panel" aria-label="All runs compared">
+      <div className="eval-section-heading">
+        <div>
+          <h2>All runs compared</h2>
+          <p>Every evaluation run side by side, by split.</p>
+        </div>
+        <DataBadge mock={measured.some((run) => run.mock)} />
+      </div>
+      {splits.map(({ split, runs: group }) => (
+        <div key={split} className="eval-all-runs-group">
+          <h3>
+            {split === "test" ? "Test" : "Development"} split ·{" "}
+            {typeof group[0].tickets === "number" ? group[0].tickets : ""} tickets
+          </h3>
+          <div className="eval-table-scroll">
+            <table className="eval-table eval-all-runs-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  {group.map((run) => (
+                    <th key={run.run_id} title={run.run_id}>
+                      {run.system === "agent" ? "Agent" : "Baseline"} {runVersion(run)}
+                      <small>{effortOf(run)} effort</small>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {METRIC_ROWS.map((row) => (
+                  <tr key={row.label} className={row.safety ? "eval-safety-row" : ""}>
+                    <th scope="row">{row.label}</th>
+                    {group.map((run) => (
+                      <td key={run.run_id}>{row.value(run as Measured)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 // Retrieval figures are supplied results; viewing this page does not perform a new retrieval experiment.
 function RetrievalCard() {
   const query = useRetrievalMetrics();
@@ -955,6 +1035,7 @@ export function EvaluationPage() {
           </>
         )
       )}
+      {runs.data && <AllRunsTable runs={runs.data} />}
       <RetrievalCard />
     </>
   );

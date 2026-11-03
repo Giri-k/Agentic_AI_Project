@@ -67,7 +67,7 @@ function makeRun(system: "agent" | "baseline", split: "dev" | "test"): EvalRun {
 }
 
 // The real route/query code consumes only read-only evaluation responses.
-function workspace(path = "/eval", mismatched = false) {
+function workspace(path = "/eval", mismatched = false, withMetrics = false) {
   const runs = [
     makeRun("agent", "test"),
     makeRun("baseline", "test"),
@@ -88,11 +88,12 @@ function workspace(path = "/eval", mismatched = false) {
       if (pathname === "/api/eval/runs")
         body = runs.map(
           ({ tickets, metrics, by_group, by_end_state, ...summary }) => {
-            void tickets;
-            void metrics;
             void by_group;
             void by_end_state;
-            return summary;
+            // The real API includes headline metrics in summaries; older servers did not.
+            return withMetrics
+              ? { ...summary, tickets: tickets.length, metrics, settings: { reasoning_effort: "low" } }
+              : summary;
           },
         );
       else if (pathname.startsWith("/api/eval/runs/"))
@@ -238,6 +239,26 @@ describe("evaluation dashboard", () => {
     expect(
       screen.getByRole("heading", { name: "No evaluation tickets match" }),
     ).toBeTruthy();
+  });
+
+  it("compares every run side by side, test and dev split apart", async () => {
+    workspace("/eval", false, true);
+    const section = await screen.findByRole("region", { name: "All runs compared" });
+    const tables = within(section).getAllByRole("table");
+    expect(tables).toHaveLength(2);
+    expect(within(section).getByText(/Test split/)).toBeTruthy();
+    expect(within(section).getByText(/Development split/)).toBeTruthy();
+    const headers = within(tables[0]).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Metric", "Agent v1low effort", "Baseline v1low effort"]);
+    const success = within(tables[0]).getByRole("row", { name: /Overall success/ });
+    expect(within(success).getAllByRole("cell")).toHaveLength(2);
+    expect(within(tables[0]).getByRole("row", { name: /Average model calls/ }).textContent).toContain("3.0");
+  });
+
+  it("leaves out the all-runs table when summaries carry no metrics", async () => {
+    workspace();
+    await screen.findByText(/Agent versus baseline/);
+    expect(screen.queryByRole("region", { name: "All runs compared" })).toBeNull();
   });
 
   it("refuses a misleading comparison when policy snapshots differ", async () => {
