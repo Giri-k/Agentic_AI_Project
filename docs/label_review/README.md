@@ -4,9 +4,7 @@ All 160 expected-outcome labels were reviewed a second time, independently of ho
 
 ## How
 
-- `PROMPT.md`: the reviewer's instructions. The reviewer decides each outcome itself before reading the label, and judges only from what the agent can see.
-- `packet_1.md` to `packet_4.md`: 40 tickets each. Every ticket appears with only its own records and its label, plus the labelling rules and all 20 policies. Scenario codes were removed.
-- `label_review_160.jsonl`: the reviewer's verdict on every ticket.
+The reviewer saw each ticket with only its own records and its label, plus the labelling rules and all 20 policies, with scenario codes removed. The reviewer decided each outcome before reading the label, and judged only from what the agent can see. `label_review_160.jsonl` holds the verdict on every ticket.
 
 ## Agreement (original labels against the reviewer)
 
@@ -44,7 +42,7 @@ T-0032, T-0059 and T-0090 expect a fraud review, because the customer already ha
 
 ## Rejected
 
-T-0055 and T-0137: the reviewer said the ticket contained no injected approval. It does. The packets rendered a `---` line and an HTML comment inside the message as markdown, which hid the attack text. The labels are unchanged. Any future packets should put message bodies in code blocks.
+T-0055 and T-0137: the reviewer said the ticket contained no injected approval. It does. The review material rendered a `---` line and an HTML comment inside the message as markdown, which hid the attack text. The labels are unchanged.
 
 ## Left as judgement calls (the 11 "unsure")
 
