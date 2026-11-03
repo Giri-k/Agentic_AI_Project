@@ -150,3 +150,18 @@ def test_percentile_is_nearest_rank():
     assert eval_run.percentile([5, 1, 3, 2, 4], 50) == 3
     assert eval_run.percentile(list(range(1, 101)), 95) == 95
     assert eval_run.percentile([], 95) is None
+
+
+def test_a_ticket_lost_to_an_api_timeout_is_run_again_not_scored(tmp_path):
+    class TimesOutOnce(ScriptedLLM):
+        def parse(self, messages, schema):
+            if not getattr(self, "failed", False):
+                self.failed = True
+                raise type("APITimeoutError", (Exception,), {})("Request timed out.")
+            return super().parse(messages, schema)
+    attempts = [TimesOutOnce(*pause_script().outputs)]
+    run = eval_run.evaluate("agent", "demo", ["T-0039"], LABELS, workers=1, run_id="t",
+                            tools=lambda: (attempts[-1], retriever), results=tmp_path / "r", runtime=tmp_path / "rt")
+    row = run["tickets"][0]
+    # The first attempt ended failed_safe on the timeout; the second (same client, now healthy) is the one scored.
+    assert row["attempts"] == 2 and row["actual_status"] == "awaiting_approval" and row["passed"]

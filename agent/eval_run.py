@@ -362,8 +362,29 @@ def run_settings(system, reasoning_effort=None):
             "prompt_versions": prompts}
 
 
+INFRA_ERRORS = ("APITimeoutError", "APIConnectionError", "RateLimitError", "InternalServerError")
+INFRA_ATTEMPTS = 3
+
+
+def infra_failure(row, events):
+    """Did this ticket end failed_safe only because the model API timed out or was unreachable? That is the
+    harness's problem, not the system's, so the ticket is run again rather than scored."""
+    return row["actual_status"] == "failed_safe" and any(
+        e["event"] == "model_call" and e.get("ok") is False
+        and any(err in str(e.get("text") or e.get("error") or "") for err in INFRA_ERRORS) for e in events)
+
+
 def run_one(system, ticket_id, label, work, out, tools):
-    """Run one ticket on a fresh store and return its scored row; any harness error becomes a failed row."""
+    """Run one ticket on a fresh store, again if the model API failed (up to INFRA_ATTEMPTS), and score it."""
+    for attempt in range(1, INFRA_ATTEMPTS + 1):
+        row, events = _attempt(system, ticket_id, label, work, out, tools)
+        if not infra_failure(row, events):
+            break
+    return {**row, "attempts": attempt}
+
+
+def _attempt(system, ticket_id, label, work, out, tools):
+    """One fresh run of one ticket; any harness error becomes a failed row."""
     shutil.rmtree(work, ignore_errors=True)
     store = Store.reset(work)
     start, error, result = time.monotonic(), None, None
@@ -381,7 +402,7 @@ def run_one(system, ticket_id, label, work, out, tools):
     if trace.exists():
         shutil.copy(trace, out / "traces" / f"{ticket_id}.jsonl")
     messages = [m for m in store.data["outbox"] if m["ticket_id"] == ticket_id]
-    return score(label, result, state, messages, events, seconds, error)
+    return score(label, result, state, messages, events, seconds, error), events
 
 
 def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=False, tools=None,
@@ -393,7 +414,12 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
     rows_path = out / "rows.jsonl"
     if redo:
         rows_path.unlink(missing_ok=True)
-    done = {r["ticket_id"]: r for r in (load_jsonl(rows_path) if rows_path.exists() else [])}
+    saved = load_jsonl(rows_path) if rows_path.exists() else []
+    done = {r["ticket_id"]: r for r in saved
+            if not infra_failure(r, load_jsonl(out / "traces" / f"{r['ticket_id']}.jsonl")
+                                 if (out / "traces" / f"{r['ticket_id']}.jsonl").exists() else [])}
+    if len(done) < len(saved):  # rows lost to API failures are run again
+        rows_path.write_text("".join(json.dumps(r) + "\n" for r in done.values()))
     todo = [t for t in ticket_ids if t not in done]
     print(f"{run_id}: {len(ticket_ids)} tickets, {len(done)} already scored, {len(todo)} to run")
 
@@ -441,7 +467,8 @@ def rescore_row(row, label, events):
             saved = e["result"]
     result = {"status": row["actual_status"], "category": row["actual_category"],
               "citations": row["actual_policy_ids"], "stop_reason": (saved or {}).get("stop_reason")}
-    return score(label, result, {"team": row["actual_team"]}, messages, events, row["seconds"], row["error"])
+    rescored = score(label, result, {"team": row["actual_team"]}, messages, events, row["seconds"], row["error"])
+    return {**rescored, **({"attempts": row["attempts"]} if "attempts" in row else {})}
 
 
 def rescore(run_id, labels, results=RESULTS):
