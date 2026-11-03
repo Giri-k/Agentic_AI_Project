@@ -141,7 +141,19 @@ def ticket_get(store, ctx, args):
             not_accessible.append(oid)
     return {"as_of": store.as_of, "ticket": ticket, "customer_name": store.customer(ctx.customer_id)["name"],
             "status": state["status"], "version": state["version"], "actions": state["actions"],
-            "orders": orders, "orders_not_on_this_account": not_accessible}
+            "orders": orders, "orders_not_on_this_account": not_accessible,
+            "prior_refunds_on_other_orders": _prior_refunds(store, ctx.customer_id, ticket["order_ids"])}
+
+
+def _prior_refunds(store, customer_id, ticket_orders):
+    """The customer's refunds on orders this ticket doesn't mention, with the staff reason (POL-FRD-01 counts
+    prior non-delivery claims from these)."""
+    others = {o["order_id"] for o in store.data["orders"]
+              if o["customer_id"] == customer_id and o["order_id"] not in ticket_orders}
+    reasons = {a["approval_id"]: a.get("reason") for a in store.data["approvals"]}
+    return [{"order_id": r["order_id"], "refund_id": r["refund_id"], "amount_cents": r["amount_cents"],
+             "created_at": r["created_at"], "status": r["status"], "reason": reasons.get(r["approval_id"])}
+            for r in store.data["refunds"] if r["order_id"] in others]
 
 
 def send_message(store, ctx, args):

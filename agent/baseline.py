@@ -78,6 +78,7 @@ def _single_pass(store, d, trace, ticket_id, llm, progress):
                 {"role": "user", "content": json.dumps({"as_of": view["as_of"], "ticket": view["ticket"],
                                                         "status_now": view["status"], "orders": view["orders"],
                                                         "orders_not_on_this_account": view["orders_not_on_this_account"],
+                                                        "prior_refunds_on_other_orders": view.get("prior_refunds_on_other_orders", []),
                                                         "policy_passages": passages, "policy_search": note})}]
 
     d.budget.model_calls += 1

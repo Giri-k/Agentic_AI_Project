@@ -58,6 +58,17 @@ def test_ticket_get_hides_injected_failures_and_other_customers_orders(store):
     assert view["orders"] == [] and view["orders_not_on_this_account"]
 
 
+@pytest.mark.parametrize("ticket_id", tickets_of("D6"))
+def test_ticket_get_shows_prior_refunds_on_the_customers_other_orders(store, ticket_id):
+    """POL-FRD-01 counts prior non-delivery claims, so the history must be visible (not only the ticket's order)."""
+    view = ticket_get(store, ctx_for(store, ticket_id), TicketGetArgs(ticket_id=ticket_id))
+    history = view["prior_refunds_on_other_orders"]
+    assert len(history) == 2 and all(h["reason"] == "Customer reported non-delivery" for h in history)
+    assert not {h["order_id"] for h in history} & set(view["ticket"]["order_ids"])
+    view = ticket_get(store, ctx_for(store, "T-0039"), TicketGetArgs(ticket_id="T-0039"))
+    assert view["prior_refunds_on_other_orders"] == []
+
+
 def test_ticket_get_other_ticket_stops_the_run(store):
     with pytest.raises(StopRun):
         ticket_get(store, ctx_for(store, "T-0039"), TicketGetArgs(ticket_id="T-0040"))
