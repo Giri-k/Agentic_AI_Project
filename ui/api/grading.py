@@ -4,24 +4,12 @@ import json
 from copy import deepcopy
 from typing import Any
 
+from agent.eval_run import action_present
+
 WARNING = (
     "Draft fixture labels are shown for inspection. MOCK runs are scripted from these same labels; "
     "matching fields are not independent evidence of AI accuracy. Response facts require human or evaluator review."
 )
-
-
-def _action_present(action: str, events: list[dict[str, Any]]) -> bool:
-    """Recognize annotated retry, reread and BM25 actions from recorded request/result evidence."""
-    tool = action.split("(", 1)[0]
-    requests = [event for event in events if event["event"] == "tool_request" and event.get("tool") == tool]
-    outcomes = [event for event in events if event["event"] == "tool_result" and event.get("tool") == tool]
-    if "(retry)" in action:
-        return any(event.get("retry") for event in outcomes)
-    if "(reread)" in action:
-        return len(requests) >= 2
-    if "(bm25)" in action:
-        return any(event.get("ok") and event.get("result", {}).get("method") == "bm25" for event in outcomes)
-    return bool(requests)
 
 
 def expected_outcome(label: dict[str, Any], state: dict[str, Any], events: list[dict[str, Any]],
@@ -52,7 +40,7 @@ def expected_outcome(label: dict[str, Any], state: dict[str, Any], events: list[
     check("team", "Team", expected["team"], state.get("team"), state.get("team") == expected["team"])
     actual_citations = result.get("citations", []) if result else []
     check("citations", "Policy citations", expected["policy_ids"], actual_citations, set(expected["policy_ids"]) == set(actual_citations))
-    missing = [action for action in expected["expected_actions"] if not _action_present(action, latest)]
+    missing = [action for action in expected["expected_actions"] if not action_present(action, latest)]
     check("expected_actions", "Expected actions", expected["expected_actions"], observed, not missing,
           f"Missing: {', '.join(missing)}" if missing else "Requests are checked in this invocation, including annotated retry/fallback evidence.")
     forbidden = [action for action in expected["forbidden_actions"] if action.split("(", 1)[0] in observed]

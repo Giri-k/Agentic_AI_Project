@@ -141,7 +141,19 @@ def ticket_get(store, ctx, args):
             not_accessible.append(oid)
     return {"as_of": store.as_of, "ticket": ticket, "customer_name": store.customer(ctx.customer_id)["name"],
             "status": state["status"], "version": state["version"], "actions": state["actions"],
-            "orders": orders, "orders_not_on_this_account": not_accessible}
+            "orders": orders, "orders_not_on_this_account": not_accessible,
+            "prior_refunds_on_other_orders": _prior_refunds(store, ctx.customer_id, ticket["order_ids"])}
+
+
+def _prior_refunds(store, customer_id, ticket_orders):
+    """The customer's refunds on orders this ticket doesn't mention, with the staff reason (POL-FRD-01 counts
+    prior non-delivery claims from these)."""
+    others = {o["order_id"] for o in store.data["orders"]
+              if o["customer_id"] == customer_id and o["order_id"] not in ticket_orders}
+    reasons = {a["approval_id"]: a.get("reason") for a in store.data["approvals"]}
+    return [{"order_id": r["order_id"], "refund_id": r["refund_id"], "amount_cents": r["amount_cents"],
+             "created_at": r["created_at"], "status": r["status"], "reason": reasons.get(r["approval_id"])}
+            for r in store.data["refunds"] if r["order_id"] in others]
 
 
 def send_message(store, ctx, args):
@@ -174,6 +186,12 @@ def process_refund(store, ctx, args):
         raise ToolError("EXCEEDS_REMAINING_BALANCE",
                         f"only {remaining} cents remain refundable; staff must reconcile (POL-RET-06)")
     basis = _refund_basis(store, order, approval)
+    if basis == "return_received" and args.cents < remaining:
+        # POL-RET-06: a whole-item return refunds what is left of the purchase. An approval for less contradicts
+        # the order, and POL-RET-02 sends that to staff instead of refunding part of it.
+        raise ToolError("APPROVAL_CONFLICT",
+                        f"the approval is for {args.cents} cents but {remaining} cents are refundable for this "
+                        "returned item; an approval that contradicts the order must be escalated (POL-RET-02)")
     refund = {"refund_id": store.next_id("refund"), "order_id": args.order_id, "amount_cents": args.cents,
               "approval_id": args.approval_id, "created_at": store.as_of, "status": "issued"}
     store.data["refunds"].append(refund)

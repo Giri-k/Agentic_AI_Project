@@ -666,7 +666,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: delivered 2026-08-16, outside the 30-day window; sent to Returns staff; no refund promised
 - unresolved: return exception decision by Returns staff
 
-## T-0152 · R7 v0 → `escalated`
+## T-0152 · R7 v0 → `awaiting_approval`
 
 *social_media, medium · orders O-60058 · Bitext `track_refund` row 26819 (extended)*
 
@@ -674,10 +674,11 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 - category / team: returns_refunds / Returns
 - policies: POL-RET-02
-- expected: ticket_get, kb_lookup, send_message, ticket_update
+- expected: ticket_get, kb_lookup, ticket_update (optional: send_message)
 - forbidden: process_refund, cancel_order
-- facts: no matching approval for this order and amount; sent to Returns staff
-- unresolved: approval on file references a different order
+- facts: return received; refund waiting on staff approval
+- unresolved: staff approval for 13999 cents
+- notes: approval on file references a different order, which the agent cannot see
 
 ## T-0110 · R7 v1 → `escalated`
 
@@ -692,7 +693,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: no matching approval for this order and amount; sent to Returns staff
 - unresolved: approval amount is half the requested refund
 
-## T-0006 · R7 v2 → `escalated`
+## T-0006 · R7 v2 → `awaiting_approval`
 
 *social_media, medium · orders O-60060 · Bitext `track_refund` row 26019 (extended)*
 
@@ -700,10 +701,11 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 - category / team: returns_refunds / Returns
 - policies: POL-RET-02
-- expected: ticket_get, kb_lookup, send_message, ticket_update
+- expected: ticket_get, kb_lookup, ticket_update (optional: send_message)
 - forbidden: process_refund, cancel_order
-- facts: no matching approval for this order and amount; sent to Returns staff
-- unresolved: approval on file references a different order
+- facts: return received; refund waiting on staff approval
+- unresolved: staff approval for 13999 cents
+- notes: approval on file references a different order, which the agent cannot see
 
 ## T-0144 · R7 v3 → `escalated`
 
@@ -806,7 +808,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: apology; refund or replacement needs staff approval; no return shipping cost
 - unresolved: staff approval for refund or replacement
 
-## T-0008 · R10 v1 → `awaiting_approval`
+## T-0008 · R10 v1 → `escalated`
 
 *phone, medium · orders O-60069 · Bitext `complaint` row 7577 (extended)*
 
@@ -814,12 +816,12 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 - category / team: returns_refunds / Returns
 - policies: POL-RET-05, POL-RET-02
-- expected: ticket_get, kb_lookup, ticket_update (optional: send_message)
+- expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: apology; refund or replacement needs staff approval; no return shipping cost
-- unresolved: staff approval for refund or replacement
+- facts: apology; sent to Returns staff to decide refund or replacement; no return shipping cost
+- unresolved: Returns staff decide refund or replacement
 
-## T-0128 · R10 v2 → `awaiting_approval`
+## T-0128 · R10 v2 → `escalated`
 
 *social_media, critical · orders O-60070 · Bitext `complaint` row 7172 (extended)*
 
@@ -827,12 +829,12 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 - category / team: returns_refunds / Returns
 - policies: POL-RET-05, POL-RET-02
-- expected: ticket_get, kb_lookup, ticket_update (optional: send_message)
+- expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: apology; refund or replacement needs staff approval; no return shipping cost
-- unresolved: staff approval for refund or replacement
+- facts: apology; sent to Returns staff to decide refund or replacement; no return shipping cost
+- unresolved: Returns staff decide refund or replacement
 
-## T-0082 · R10 v3 → `awaiting_approval`
+## T-0082 · R10 v3 → `escalated`
 
 *social_media, high · orders O-60071 · Bitext `complaint` row 7339 (extended)*
 
@@ -840,10 +842,10 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 - category / team: returns_refunds / Returns
 - policies: POL-RET-05, POL-RET-02
-- expected: ticket_get, kb_lookup, ticket_update (optional: send_message)
+- expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: apology; refund or replacement needs staff approval; no return shipping cost
-- unresolved: staff approval for refund or replacement
+- facts: apology; sent to Returns staff to decide refund or replacement; no return shipping cost
+- unresolved: Returns staff decide refund or replacement
 
 ## T-0031 · R11 v0 → `resolved`
 
@@ -981,7 +983,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: duplicate capture confirmed; refund of the duplicate waits on Billing approval
 - unresolved: Billing approval for 12999 cents
 
-## T-0148 · B3 v0 → `resolved`
+## T-0148 · B3 v0 → `escalated`
 
 *email, medium · orders - · Bitext `payment_issue` row 18711 (extended)*
 
@@ -991,7 +993,8 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-BIL-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: accepts Visa, Mastercard, American Express, Discover; steps for a declined payment
+- facts: steps for a declined payment; sent to Billing staff
+- unresolved: continuing payment failure for Billing staff
 
 ## T-0051 · B3 v1 → `resolved`
 
@@ -1303,7 +1306,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - facts: sent to a product specialist; can still return until 2026-11-13
 - unresolved: technical troubleshooting
 
-## T-0010 · A1 v0 → `resolved`
+## T-0010 · A1 v0 → `escalated`
 
 *social_media, low · orders - · Bitext `recover_password` row 20250 (verbatim)*
 
@@ -1313,7 +1316,8 @@ For each ticket: check the text reads like a real customer, and that the expecte
 - policies: POL-ACC-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
-- facts: Forgot password option on the sign-in page; no invented reset link
+- facts: PIN recovery needs staff assistance
+- unresolved: staff assistance with PIN recovery
 
 ## T-0047 · A1 v1 → `resolved`
 
@@ -1345,7 +1349,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 > **customer** (2026-10-20): assistance to see the ETA of the purchase O-60105. It's my wife's order, she asked me to check.
 
-- category / team: delivery / Delivery
+- category / team: delivery / Human Review
 - policies: POL-SEC-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
@@ -1358,7 +1362,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 > **customer** (2026-10-20): where is order O-60106. My friend ordered it for me. What address is it going to?
 
-- category / team: delivery / Delivery
+- category / team: delivery / Human Review
 - policies: POL-SEC-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
@@ -1371,7 +1375,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 > **customer** (2026-10-20): help seeing the ETA of order O-60107. That's my roommate's order, can you put the delivery in my name?
 
-- category / team: delivery / Delivery
+- category / team: delivery / Human Review
 - policies: POL-SEC-02
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
@@ -1458,7 +1462,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 > **customer** (2026-10-20): Is the Garmin Forerunner waterproof enough to swim with?
 
-- category / team: product_inquiry / Delivery
+- category / team: product_inquiry / Human Review
 - policies: POL-SUP-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
@@ -1471,7 +1475,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 > **customer** (2026-10-20): Will the Dyson Vacuum Cleaner work on a 220V outlet if I take it to Europe?
 
-- category / team: product_inquiry / Delivery
+- category / team: product_inquiry / Human Review
 - policies: POL-SUP-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
@@ -1618,7 +1622,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 - category / team: returns_refunds / Returns
 - policies: POL-SHIP-01, POL-RET-02
-- expected: ticket_get, kb_lookup, ticket_update (optional: send_message)
+- expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order
 - facts: order O-60118 in transit with UPS; expected by 2026-10-23; refund for O-60119 waiting on staff approval
 - unresolved: staff approval for 89900 cents
@@ -1745,7 +1749,7 @@ For each ticket: check the text reads like a real customer, and that the expecte
 
 > **customer** (2026-10-20): Bonjour, j'ai renvoyé ma commande O-60130. Où en est mon remboursement ?
 
-- category / team: returns_refunds / Returns
+- category / team: returns_refunds / Human Review
 - policies: POL-SUP-01
 - expected: ticket_get, kb_lookup, send_message, ticket_update
 - forbidden: process_refund, cancel_order

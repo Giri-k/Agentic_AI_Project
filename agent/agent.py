@@ -29,7 +29,7 @@ from .tools import CARD_NUMBER
 from .trace import Trace
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
-PROMPT_VERSIONS = {"classify": "classify_v1", "step": "agent_v1", "check": "check_v1"}
+PROMPT_VERSIONS = {"classify": "classify_v1", "step": "agent_v2", "check": "check_v1"}
 PROMPTS = {purpose: (PROMPT_DIR / f"{version}.txt").read_text() for purpose, version in PROMPT_VERSIONS.items()}
 
 RESUMABLE = {"awaiting_approval", "awaiting_customer", "failed_safe"}
@@ -334,6 +334,7 @@ class _AgentRun:
     def _known_amounts(self):
         """Amounts a reply may state: the records (and simple sums of them), the ticket text and the policies."""
         known = set(_cents_in(self.view["orders"])) | set(_cents_in(self.results))
+        known |= set(_cents_in(self.view.get("prior_refunds_on_other_orders", [])))
         for order in self.view["orders"]:
             known |= {item["unit_cents"] * item["qty"] for item in order["items"]}
             captured = sum(p["amount_cents"] for p in order["payments"] if p["status"] == "captured")
@@ -409,6 +410,7 @@ class _AgentRun:
         context = {"as_of": view["as_of"], "ticket": view["ticket"], "customer_name": view["customer_name"],
                    "ticket_status_now": view["status"], "ticket_actions_so_far": view["actions"],
                    "orders": view["orders"], "orders_not_on_this_account": view["orders_not_on_this_account"],
+                   "prior_refunds_on_other_orders": view.get("prior_refunds_on_other_orders", []),
                    "category": category, "team": CATEGORY_TEAM[Category(category)].value if category else None,
                    "customer_wants": self.ckpt["summary"], "previous_result": self.previous,
                    "policy_evidence": list(self.ckpt["evidence"].values()), "this_run_results": self.results,
@@ -423,7 +425,8 @@ class _AgentRun:
                    "unresolved_requirements": finish.unresolved_requirements,
                    "records": {"as_of": self.view["as_of"], "customer_name": self.view["customer_name"],
                                "orders": self.view["orders"],
-                               "orders_not_on_this_account": self.view["orders_not_on_this_account"]},
+                               "orders_not_on_this_account": self.view["orders_not_on_this_account"],
+                               "prior_refunds_on_other_orders": self.view.get("prior_refunds_on_other_orders", [])},
                    "receipts": self.store.ticket_state(self.ticket_id)["actions"], "this_run_results": self.results,
                    "customer_messages": [m for m in self.view["ticket"]["messages"] if m["role"] == "customer"]}
         return [{"role": "system", "content": PROMPTS["check"]}, {"role": "user", "content": json.dumps(content)}]

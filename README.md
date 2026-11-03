@@ -88,13 +88,17 @@ sequenceDiagram
 
 ```
 agent/
-  config.py          paths, model IDs, per-ticket limits (4 model calls, 6 tool calls, ...)
+  config.py          paths, model IDs, per-ticket limits (8 model calls, 8 tool calls, ...)
   schemas.py         TicketResult, categories, statuses, team routing, ToolError / StopRun
   store.py           working store in runtime/, safe writes, balance and lookup helpers
   tools.py           the 6 tools and their permission checks
   dispatcher.py      the only path from a model tool call to a tool
   retrieval.py       policy chunks, embeddings + cosine, BM25 fallback
   llm.py             Portkey client and embeddings
+  agent.py           the agent loop: classify, act step by step, check the reply, pause/resume
+  baseline.py        single pass: one retrieval, one model call
+  eval_run.py        runs the agent and the baseline on a split and scores them against the labels
+  judge.py           LLM judge: does each sent reply state the label's expected facts, without unsupported claims
   eval_retrieval.py  Hit@3 / Recall@3 / Precision@3 / MRR for retrieval
   trace.py           JSONL traces, card numbers removed
   staff.py           human staff actions: reset, approve, status
@@ -104,6 +108,8 @@ data/
   check_dataset.py   checks every label against the store records
 policies/            20 store policies (POL-*.md, v1.1)
 tests/               pytest suite (no API key needed)
+results/eval/        measured evaluation runs, per-ticket rows and traces
+ui/                  support console (FastAPI + React), see ui/README.md
 ```
 
 ---
@@ -164,12 +170,14 @@ orders, payments, approvals and refunds so every decision can be checked against
 |---|---|
 | Synthetic dataset + checker | ✅ Done |
 | 20 policies (v1.1) | ✅ Done |
-| Store, tools, dispatcher, staff script | ✅ Done (210 tests) |
+| Store, tools, dispatcher, staff script | ✅ Done |
 | Retrieval (embeddings + BM25) | ✅ Done |
-| Agent loop (prompt, pause/resume, schema repair) | ⏳ Next |
-| Reply grounding check | Planned |
-| Single-pass baseline | Planned |
-| Evaluation on the test split | Planned |
+| Agent loop (prompt, pause/resume, schema repair) | ✅ Done |
+| Reply grounding check | ✅ Done |
+| Single-pass baseline | ✅ Done |
+| Support console on the real agent (RealAdapter) | ✅ Done |
+| Evaluation on the test split | ✅ Done (`results/eval/`) |
+| Report and demo recording | ⏳ Next |
 
 ---
 
@@ -185,10 +193,18 @@ echo 'PORTKEY_API_KEY=...' > .env
 # 3. Run the tests (no key needed)
 uv run pytest
 
-# 4. Measure retrieval on the dev split (uses the key)
-uv run python -m agent.eval_retrieval --split dev
+# 4. Measure retrieval (uses the key); --save shows the result in the console
+uv run python -m agent.eval_retrieval --split test --save
 
-# 5. Staff actions used in the demo
+# 5. Evaluate the agent and the baseline (uses the key); rerun the same command to finish an interrupted run
+uv run python -m agent.eval_run --split dev --tag v2                         # 44 dev tickets
+uv run python -m agent.eval_run --split test --tag v2                        # 115 test tickets
+uv run python -m agent.eval_run --split dev --tag v2-high --reasoning-effort high
+uv run python -m agent.eval_run --split test --tag v2 --rescore              # re-score saved runs, no model calls
+uv run python -m agent.judge --runs agent-test-v2,baseline-test-v2           # judge what the replies say
+uv run python -m agent.judge --spotcheck agent-test-v2,baseline-test-v2      # 20 verdicts to check by hand
+
+# 6. Staff actions used in the demo
 uv run python -m agent.staff reset              # fresh working store in runtime/
 uv run python -m agent.staff approve APR-8013   # staff approves the T-0039 refund
 uv run python -m agent.staff status T-0039      # show the saved ticket state

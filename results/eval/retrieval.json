@@ -1,0 +1,26 @@
+{
+ "mock": false,
+ "measured": true,
+ "source": "python -m agent.eval_retrieval",
+ "split": "test",
+ "tickets": 115,
+ "queries": 115,
+ "methods": [
+  {
+   "method": "embeddings",
+   "hit_at_3": 0.8695652173913043,
+   "recall_at_3": 0.7217391304347827,
+   "precision_at_3": 0.336231884057971,
+   "mrr": 0.763768115942029
+  },
+  {
+   "method": "bm25",
+   "hit_at_3": 0.7304347826086957,
+   "recall_at_3": 0.6028985507246376,
+   "precision_at_3": 0.26666666666666666,
+   "mrr": 0.5942028985507246
+  }
+ ],
+ "provenance": "Measured: each of 115 test tickets' own text searched with embeddings and with BM25, top 3 compared with the labelled policy IDs.",
+ "note": "The query is the ticket's subject and customer messages, standing in for the agent's own query."
+}

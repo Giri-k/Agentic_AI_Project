@@ -6056,7 +6056,7 @@
       "order_id": "O-60065",
       "amount_cents": 34900,
       "approved_by": "S-202",
-      "created_at": "2026-10-15",
+      "created_at": "2026-10-13",
       "reason": "Return received like new, within window"
     },
     {
@@ -6064,7 +6064,7 @@
       "order_id": "O-60066",
       "amount_cents": 24999,
       "approved_by": "S-203",
-      "created_at": "2026-10-15",
+      "created_at": "2026-10-13",
       "reason": "Return received like new, within window"
     },
     {
@@ -6072,7 +6072,7 @@
       "order_id": "O-60067",
       "amount_cents": 4999,
       "approved_by": "S-203",
-      "created_at": "2026-10-15",
+      "created_at": "2026-10-13",
       "reason": "Return received like new, within window"
     },
     {

@@ -58,6 +58,17 @@ def test_ticket_get_hides_injected_failures_and_other_customers_orders(store):
     assert view["orders"] == [] and view["orders_not_on_this_account"]
 
 
+@pytest.mark.parametrize("ticket_id", tickets_of("D6"))
+def test_ticket_get_shows_prior_refunds_on_the_customers_other_orders(store, ticket_id):
+    """POL-FRD-01 counts prior non-delivery claims, so the history must be visible (not only the ticket's order)."""
+    view = ticket_get(store, ctx_for(store, ticket_id), TicketGetArgs(ticket_id=ticket_id))
+    history = view["prior_refunds_on_other_orders"]
+    assert len(history) == 2 and all(h["reason"] == "Customer reported non-delivery" for h in history)
+    assert not {h["order_id"] for h in history} & set(view["ticket"]["order_ids"])
+    view = ticket_get(store, ctx_for(store, "T-0039"), TicketGetArgs(ticket_id="T-0039"))
+    assert view["prior_refunds_on_other_orders"] == []
+
+
 def test_ticket_get_other_ticket_stops_the_run(store):
     with pytest.raises(StopRun):
         ticket_get(store, ctx_for(store, "T-0039"), TicketGetArgs(ticket_id="T-0040"))
@@ -77,6 +88,17 @@ def test_demo_refund_needs_staff_approval_and_uses_it_once(store):
     with pytest.raises(ToolError) as again:
         refund(store, "T-0039", **demo)
     assert again.value.code == "APPROVAL_ALREADY_USED"
+
+
+@pytest.mark.parametrize("ticket_id", [t for t in tickets_of("R7") if LABELS[t]["variant"] % 2 == 1])
+def test_an_approval_for_less_than_the_returned_item_is_a_conflict_not_a_partial_refund(store, ticket_id):
+    """R7: staff approved half of a whole-item return. POL-RET-02 says escalate, so Python refuses to refund."""
+    order_id = store.tickets[ticket_id]["order_ids"][0]
+    approval = store.approvals(order_id)[0]
+    assert approval["amount_cents"] < store.remaining_refundable_cents(order_id)
+    with pytest.raises(ToolError) as err:
+        refund(store, ticket_id, order_id=order_id, cents=approval["amount_cents"], approval_id=approval["approval_id"])
+    assert err.value.code == "APPROVAL_CONFLICT" and not store.refunds(order_id)
 
 
 @pytest.mark.parametrize("ticket_id", tickets_of("R8"))
