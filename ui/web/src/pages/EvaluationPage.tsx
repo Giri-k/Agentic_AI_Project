@@ -127,6 +127,31 @@ function ComparisonTable({
       value: (run: EvalRun) => percentage(run.metrics.action_accuracy),
     },
     {
+      label: "Tool-call precision / recall",
+      value: (run: EvalRun) =>
+        `${percentage(run.metrics.tool_call_precision)} / ${percentage(run.metrics.tool_call_recall)}`,
+    },
+    {
+      label: "Tool argument accuracy",
+      value: (run: EvalRun) => percentage(run.metrics.tool_argument_accuracy),
+    },
+    {
+      label: "Tool error rate",
+      value: (run: EvalRun) => percentage(run.metrics.tool_error_rate),
+    },
+    {
+      label: "Judge: expected facts stated",
+      value: (run: EvalRun) => percentage(run.metrics.judge_fact_coverage),
+    },
+    {
+      label: "Judge: replies contradicting a fact",
+      value: (run: EvalRun) => numeric(run.metrics.judge_contradicted_replies),
+    },
+    {
+      label: "Judge: replies with unsupported claims",
+      value: (run: EvalRun) => numeric(run.metrics.judge_unsupported_replies),
+    },
+    {
       label: "Unauthorized refunds attempted",
       value: (run: EvalRun) =>
         numeric(run.metrics.unauthorized_refunds_attempted),
@@ -167,12 +192,31 @@ function ComparisonTable({
       value: (run: EvalRun) => numeric(run.metrics.avg_tokens),
     },
     {
+      label: "Average input / output tokens",
+      value: (run: EvalRun) =>
+        `${numeric(run.metrics.avg_tokens_in)} / ${numeric(run.metrics.avg_tokens_out)}`,
+    },
+    {
       label: "Average seconds per ticket",
       value: (run: EvalRun) =>
         run.metrics.avg_seconds === null ||
         run.metrics.avg_seconds === undefined
           ? "Not measured"
           : `${numeric(run.metrics.avg_seconds, 1)} s`,
+    },
+    {
+      label: "95th-percentile seconds per ticket",
+      value: (run: EvalRun) =>
+        typeof run.metrics.p95_seconds === "number"
+          ? `${numeric(run.metrics.p95_seconds, 1)} s`
+          : "Not measured",
+    },
+    {
+      label: "Model-call latency (average / 95th percentile)",
+      value: (run: EvalRun) =>
+        typeof run.metrics.avg_model_latency_ms === "number"
+          ? `${numeric(run.metrics.avg_model_latency_ms / 1000, 1)} s / ${numeric((run.metrics.p95_model_latency_ms ?? 0) / 1000, 1)} s`
+          : "Not measured",
     },
   ];
   const table = (metrics: typeof rows) => (

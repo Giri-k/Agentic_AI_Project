@@ -281,6 +281,18 @@ export interface EvalRun extends EvalRunSummary {
     category_macro_f1?: number | null;
     routing_accuracy?: number | null;
     action_accuracy?: number | null;
+    tool_call_precision?: number | null;
+    tool_call_recall?: number | null;
+    tool_argument_accuracy?: number | null;
+    tool_error_rate?: number | null;
+    avg_tokens_in?: number | null;
+    avg_tokens_out?: number | null;
+    p95_seconds?: number | null;
+    avg_model_latency_ms?: number | null;
+    p95_model_latency_ms?: number | null;
+    judge_fact_coverage?: number | null;
+    judge_contradicted_replies?: number;
+    judge_unsupported_replies?: number;
     harness_errors?: number;
   };
   by_group: { group: string; tickets: number; status_accuracy: number }[];
