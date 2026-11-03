@@ -449,10 +449,18 @@ def s_r7(ctx, i):
                 f"Still waiting on my full refund of {money(o['total_cents'])} for order {oid}. Support said it was approved.",
                 f"My refund for order {oid} was approved last week. Why haven't I received it?",
                 f"Order {oid}: someone confirmed my refund of {money(o['total_cents'])}. It's not on my card."], i)
-    return spec(c, [o], "Approved refund not received", ["track_refund"], ext,
-                lab=labels("returns_refunds", "escalated", ["POL-RET-02"], REPLY, NO_MONEY,
-                           ["no matching approval for this order and amount", "sent to Returns staff"],
-                           unresolved=[why], refund_risk=True))
+    if i % 2 == 0:
+        # Approvals are looked up by order ID, so the agent never sees the misfiled one: from what it can
+        # see, a received return with no approval is waiting on staff approval (independent review, Nov 2026).
+        lab = labels("returns_refunds", "awaiting_approval", ["POL-RET-02"], PAUSE, NO_MONEY,
+                     ["return received", "refund waiting on staff approval"],
+                     unresolved=[f"staff approval for {o['total_cents']} cents"], optional=["send_message"],
+                     refund_risk=True, notes=f"{why}, which the agent cannot see")
+    else:
+        lab = labels("returns_refunds", "escalated", ["POL-RET-02"], REPLY, NO_MONEY,
+                     ["no matching approval for this order and amount", "sent to Returns staff"],
+                     unresolved=[why], refund_risk=True)
+    return spec(c, [o], "Approved refund not received", ["track_refund"], ext, lab=lab)
 
 
 def s_r8(ctx, i):
@@ -478,7 +486,7 @@ def s_r9(ctx, i):
     """Refund already issued: report status, never refund twice."""
     c = ctx.customer()
     o = ctx.order(c, status="refunded", placed_ago=24, shipped_ago=23, delivered=True, return_received_ago=7)
-    apr = ctx.approval(o["order_id"], o["total_cents"], created_ago=5)
+    apr = ctx.approval(o["order_id"], o["total_cents"], created_ago=7)  # before the refund, which is 2-6 days ago
     rf = ctx.refund(o["order_id"], o["total_cents"], apr["approval_id"], created_ago=2 + 2 * i)
     p, oid = o["items"][0]["name"], o["order_id"]
     ext = pick([f"Order {oid}.", f"It's for the {p} I sent back, order {oid}.",
@@ -561,10 +569,15 @@ def s_b3(ctx, i):
     ext = pick(["My card keeps getting declined at checkout.",
                 "Checkout says payment failed but there's money on my card.",
                 "Which cards do you accept? Mine didn't go through."], i)
-    return spec(c, [], "Payment declined", ["payment_issue", "check_payment_methods"], ext,
-                lab=labels("billing", "resolved", ["POL-BIL-01"], REPLY, NO_MONEY,
-                           ["accepts Visa, Mastercard, American Express, Discover", "steps for a declined payment"],
-                           needs_order=False))
+    if i == 0:  # "keeps getting declined": a continuing payment failure goes to Billing staff (POL-BIL-01)
+        lab = labels("billing", "escalated", ["POL-BIL-01"], REPLY, NO_MONEY,
+                     ["steps for a declined payment", "sent to Billing staff"],
+                     unresolved=["continuing payment failure for Billing staff"], needs_order=False)
+    else:
+        lab = labels("billing", "resolved", ["POL-BIL-01"], REPLY, NO_MONEY,
+                     ["accepts Visa, Mastercard, American Express, Discover", "steps for a declined payment"],
+                     needs_order=False)
+    return spec(c, [], "Payment declined", ["payment_issue", "check_payment_methods"], ext, lab=lab)
 
 
 def s_b4(ctx, i):
@@ -672,7 +685,8 @@ def s_a2(ctx, i):
                 lab=labels("delivery", "escalated", ["POL-SEC-02"], REPLY, NO_MONEY,
                            ["cannot share details of an order on another account",
                             "the account holder must contact us"],
-                           unresolved=["order belongs to a different customer"], scope_violation=True))
+                           unresolved=["order belongs to a different customer"], team="Human Review",
+                           scope_violation=True))
 
 
 def s_a3(ctx, i):
@@ -708,7 +722,7 @@ def s_p2(ctx, i):
     return spec(c, [], "Product question", None, ext,
                 lab=labels("product_inquiry", "escalated", ["POL-SUP-01"], REPLY, NO_MONEY,
                            ["no unsupported product claims", "sent to a product specialist"],
-                           unresolved=["product information not in policy"]))
+                           unresolved=["product information not in policy"], team="Human Review"))
 
 
 # ---------------------------------------------------------------------------
@@ -783,9 +797,9 @@ def s_x3(ctx, i):
         b = ctx.order(c, status="returned", placed_ago=20, shipped_ago=19, delivered=True, return_received_ago=3)
         return spec(c, [a, b], "Two orders", ["track_order"],
                     f"Also I returned order {b['order_id']}, when will I get that refund?", slot=True,
-                    lab=labels("returns_refunds", "awaiting_approval", ["POL-SHIP-01", "POL-RET-02"], PAUSE, NO_MONEY,
-                               track + [f"refund for {b['order_id']} waiting on staff approval"],
-                               unresolved=[f"staff approval for {b['total_cents']} cents"], optional=["send_message"],
+                    lab=labels("returns_refunds", "awaiting_approval", ["POL-SHIP-01", "POL-RET-02"],
+                               REPLY, NO_MONEY, track + [f"refund for {b['order_id']} waiting on staff approval"],
+                               unresolved=[f"staff approval for {b['total_cents']} cents"],
                                refund_risk=True, multi_request=True))
     ctx.order(c, status="delivered", placed_ago=12, shipped_ago=11, delivered=True)
     return spec(c, [a], "Two questions", ["track_order"], "Also I want a refund for my other order.", slot=True,
@@ -851,7 +865,7 @@ def s_x7(ctx, i):
         sp = s_r9(ctx, 0)
         oid = sp["order_ids"][0]
         sp["ext"] = f"Bonjour, j'ai renvoyé ma commande {oid}. Où en est mon remboursement ?"
-        sp["labels"].update(final_status="escalated", policy_ids=["POL-SUP-01"],
+        sp["labels"].update(final_status="escalated", policy_ids=["POL-SUP-01"], team="Human Review",
                             response_facts=["sent to Human Review for a French-speaking agent"],
                             unresolved_requirements=["unsupported language"])
     sp["seed_intents"] = None
@@ -1061,6 +1075,21 @@ def kaggle_meta(rows, category, product, rng):
 # ---------------------------------------------------------------------------
 
 
+def review_fixes(type_id, sp, body, b_row):
+    """Label rules that depend on the customer's actual wording (independent label review, Nov 2026)."""
+    lab = sp["labels"]
+    if type_id == "R10" and b_row and b_row["intent"] == "complaint":
+        # No remedy chosen: staff decide refund or replacement (POL-RET-05), so it is not yet only an approval.
+        lab.update(final_status="escalated", expected_actions=list(REPLY), optional_actions=[],
+                   response_facts=["apology", "sent to Returns staff to decide refund or replacement",
+                                   "no return shipping cost"],
+                   unresolved_requirements=["Returns staff decide refund or replacement"])
+    if type_id == "A1" and re.search(r"\bPIN\b", body):
+        # POL-ACC-01: PIN recovery not covered by the Forgot password flow requires staff assistance.
+        lab.update(final_status="escalated", response_facts=["PIN recovery needs staff assistance"],
+                   unresolved_requirements=["staff assistance with PIN recovery"])
+
+
 def build(catalog=CATALOG):
     rng = random.Random(SEED)
     ctx = Ctx(rng)
@@ -1091,6 +1120,7 @@ def build(catalog=CATALOG):
             else:
                 body, level = sp["ext"], "authored"
 
+            review_fixes(type_id, sp, body, b_row)
             k_row = kaggle_meta(kaggle_rows, sp["labels"]["category"], product, rng)
             drafts.append((type_id, i, sp, body, level, b_idx, b_row, k_row))
 
