@@ -2,8 +2,6 @@
 claims the records, receipts and policies don't support?
 
 Usage:  uv run python -m agent.judge --runs agent-test,baseline-test [--workers 6] [--redo]
-        uv run python -m agent.judge --spotcheck agent-test,baseline-test   # 20 verdicts to check by hand
-        uv run python -m agent.judge --agreement docs/judge_spotcheck.csv   # judge vs your verdicts
 
 It reads saved traces only (no agent is run) and writes results/eval/<run>/judge.jsonl, then rescores the run so
 the Evaluation page shows the judge's numbers. The judge never sees which system wrote a reply. Structured checks
@@ -11,9 +9,7 @@ the Evaluation page shows the judge's numbers. The judge never sees which system
 """
 
 import argparse
-import csv
 import json
-import random
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -131,41 +127,11 @@ def judge_run(run_id, labels, workers=6, redo=False, llm_factory=None, results=R
     return rescore(run_id, labels, results=results)
 
 
-def spotcheck(run_ids, n=20, seed=7, results=RESULTS, path=Path("docs/judge_spotcheck.csv")):
-    """A random sample of judged facts for a person to check: fill in your_verdict, then run --agreement."""
-    rng, sample = random.Random(seed), []
-    for run_id in run_ids:
-        for row in load_jsonl(Path(results) / run_id / "judge.jsonl"):
-            for f in row["facts"]:
-                sample.append((run_id, row["ticket_id"], f))
-    picked = rng.sample(sample, min(n, len(sample)))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow(["run", "ticket_id", "expected_fact", "judge_verdict", "judge_quote", "reply", "your_verdict"])
-        for run_id, ticket_id, f in sorted(picked, key=lambda x: (x[0], x[1])):
-            events = load_jsonl(Path(results) / run_id / "traces" / f"{ticket_id}.jsonl")
-            reply = " | ".join(json.loads(e["args"])["body"] for e in events
-                               if e["event"] == "tool_request" and e["tool"] == "send_message")
-            w.writerow([run_id, ticket_id, f["fact"], f["verdict"], f["quote"], reply, ""])
-    print(f"Wrote {len(picked)} verdicts to {path}: fill in your_verdict (stated / missing / contradicted).")
-
-
-def agreement(path):
-    """Share of hand-checked verdicts where the judge agrees with the person."""
-    rows = [r for r in csv.DictReader(open(path)) if r["your_verdict"].strip()]
-    agree = sum(r["your_verdict"].strip().lower() == r["judge_verdict"] for r in rows)
-    print(f"{agree}/{len(rows)} judge verdicts match the hand check" + (f" ({agree / len(rows):.0%})" if rows else ""))
-    return agree, len(rows)
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m agent.judge")
     parser.add_argument("--runs", help="comma-separated run IDs to judge, e.g. agent-test,baseline-test")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--redo", action="store_true", help="discard saved verdicts and judge again")
-    parser.add_argument("--spotcheck", help="runs to sample 20 verdicts from, for a hand check")
-    parser.add_argument("--agreement", help="a filled-in spot-check CSV")
     args = parser.parse_args(argv)
     labels = {lab["ticket_id"]: lab for lab in load_jsonl(DATA / "labels.jsonl")}
     if args.runs:
@@ -173,10 +139,6 @@ def main(argv=None):
             m = judge_run(run_id.strip(), labels, args.workers, args.redo)["metrics"]
             print(f"{run_id}: fact coverage {m['judge_fact_coverage']}, contradicted replies "
                   f"{m['judge_contradicted_replies']}, replies with unsupported claims {m['judge_unsupported_replies']}")
-    if args.spotcheck:
-        spotcheck([r.strip() for r in args.spotcheck.split(",")])
-    if args.agreement:
-        agreement(args.agreement)
 
 
 if __name__ == "__main__":

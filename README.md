@@ -108,7 +108,7 @@ data/
   check_dataset.py   checks every label against the store records
 policies/            20 store policies (POL-*.md, v1.1)
 tests/               pytest suite (no API key needed)
-results/eval/        measured evaluation runs, per-ticket rows and traces
+results/eval/        measured evaluation runs (per-ticket rows and traces stay local)
 ui/                  support console (FastAPI + React), see ui/README.md
 ```
 
@@ -202,7 +202,6 @@ uv run python -m agent.eval_run --split test --tag v2                        # 1
 uv run python -m agent.eval_run --split dev --tag v2-high --reasoning-effort high
 uv run python -m agent.eval_run --split test --tag v2 --rescore              # re-score saved runs, no model calls
 uv run python -m agent.judge --runs agent-test-v2,baseline-test-v2           # judge what the replies say
-uv run python -m agent.judge --spotcheck agent-test-v2,baseline-test-v2      # 20 verdicts to check by hand
 
 # 6. Staff actions used in the demo
 uv run python -m agent.staff reset              # fresh working store in runtime/

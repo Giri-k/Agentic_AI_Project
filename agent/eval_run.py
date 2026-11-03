@@ -8,7 +8,7 @@ Each ticket runs on its own fresh copy of the store (runtime/eval/<run>/<ticket>
 each other's refunds or messages. Results go to results/eval/ (outside runtime/, so Reset never deletes them):
   <run>/rows.jsonl     one scored row per ticket, appended as tickets finish; a rerun skips tickets already there
   <run>/traces/        each ticket's full trace, for failure analysis
-  <run>.json           the run in the shape the console's Evaluation page reads
+  <run>.json           the run in the shape the console's Evaluation page reads (the only file committed)
 
 Scoring uses only the saved result, the store and the trace, the same for both systems. The label's
 response_facts are not scored here: whether a reply says the right things still needs human review.
