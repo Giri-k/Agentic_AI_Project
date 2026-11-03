@@ -358,7 +358,7 @@ def _default_tools(reasoning_effort=None):
 def run_settings(system, reasoning_effort=None):
     """What produced a run: model, reasoning effort and prompt versions (shown with the run's results)."""
     prompts = agent_loop.PROMPT_VERSIONS if system == "agent" else {"single_pass": baseline.PROMPT_VERSION}
-    return {"model": CHAT_MODEL, "reasoning_effort": reasoning_effort or REASONING_EFFORT or "default (medium)",
+    return {"model": CHAT_MODEL, "reasoning_effort": reasoning_effort or REASONING_EFFORT,
             "prompt_versions": prompts}
 
 
