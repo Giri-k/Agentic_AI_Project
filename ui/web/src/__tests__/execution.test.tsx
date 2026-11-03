@@ -285,6 +285,30 @@ describe("interactive mock execution", () => {
     expect(screen.getByText("NO_MATCHING_APPROVAL")).toBeTruthy();
   });
 
+  it("labels the agent's routing, reply checks and revisions", async () => {
+    const scenario = executionFixture();
+    const base = { ticket_id: "T-0039", run_id: "test-run" };
+    scenario.events.push(
+      { ...base, ts: "2026-10-20T12:00:00Z", event: "route", category: "returns_refunds", team: "returns" },
+      { ...base, ts: "2026-10-20T12:00:01Z", event: "reply_check", supported: false,
+        problems: ["citation POL-X-99 is not in the evidence"], checked_by: "python" },
+      { ...base, ts: "2026-10-20T12:00:02Z", event: "revision", n: 1,
+        problems: ["citation POL-X-99 is not in the evidence"] },
+      { ...base, ts: "2026-10-20T12:00:03Z", event: "reply_check", supported: true, problems: [],
+        checked_by: "evaluator" },
+    );
+    workspace("/tickets/T-0039/trace", scenario);
+    await screen.findByRole("heading", { name: "Execution trace", level: 1 });
+    expect(await screen.findByText("Routed to Returns")).toBeTruthy();
+    expect(screen.getByText(/Category Returns refunds/i)).toBeTruthy();
+    expect(screen.getByText("Reply check found problems")).toBeTruthy();
+    expect(screen.getByText(/^Python rules: citation POL-X-99/)).toBeTruthy();
+    expect(screen.getByText("Revision 1")).toBeTruthy();
+    expect(screen.getByText(/Sent back to the model to fix: citation POL-X-99/)).toBeTruthy();
+    expect(screen.getByText("Reply check passed")).toBeTruthy();
+    expect(screen.getByText(/Python rules and the evaluator model/)).toBeTruthy();
+  });
+
   it("disables reset while another ticket is running", async () => {
     const scenario = executionFixture();
     await scenario.fetch("/api/tickets/T-0039/run", {

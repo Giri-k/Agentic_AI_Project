@@ -7,3 +7,6 @@ __pycache__/
 .env.*
 !.env.example
 
+
+# Working state from runs (store copy, traces, checkpoints, outbox, embedding cache)
+runtime/

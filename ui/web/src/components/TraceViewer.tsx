@@ -358,6 +358,44 @@ function EventRow({
       .join(" · ");
     kind = "staff";
     Icon = UserRound;
+  } else if (event.event === "route") {
+    title =
+      typeof event.team === "string"
+        ? `Routed to ${humanize(event.team)}`
+        : "Routed";
+    detail =
+      typeof event.category === "string"
+        ? `Category ${humanize(event.category)} · chosen by Python from the classification`
+        : "";
+    kind = "model";
+    Icon = ArrowUpRight;
+  } else if (event.event === "reply_check" || event.event === "revision") {
+    const problems = Array.isArray(event.problems)
+      ? event.problems.filter((value) => typeof value === "string")
+      : [];
+    // Python's rule checks run first; the evaluator model only sees replies that pass them.
+    const checker =
+      event.checked_by === "evaluator"
+        ? "Python rules and the evaluator model"
+        : "Python rules";
+    if (event.event === "revision") {
+      title = typeof event.n === "number" ? `Revision ${event.n}` : "Revision";
+      detail = problems.length
+        ? `Sent back to the model to fix: ${problems.join("; ")}`
+        : "Sent back to the model to fix its reply.";
+      kind = "warning";
+      Icon = RotateCcw;
+    } else if (event.supported === true) {
+      title = "Reply check passed";
+      detail = `Checked by ${checker}. The reply is supported by the evidence.`;
+      kind = "finished";
+      Icon = CircleCheck;
+    } else {
+      title = "Reply check found problems";
+      detail = `${checker}: ${problems.join("; ") || "unsupported claims"}`;
+      kind = "warning";
+      Icon = ShieldX;
+    }
   } else if (event.event === "run_finished") {
     const status = typeof event.status === "string" ? event.status : "";
     title = status

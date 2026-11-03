@@ -105,3 +105,13 @@ def test_budget_survives_a_checkpoint_round_trip(store):
 def test_unknown_ticket_cannot_get_a_dispatcher(store):
     with pytest.raises(StopRun, match="unknown_ticket"):
         Dispatcher(store, "T-9999")
+
+
+def test_a_shared_retriever_does_not_keep_another_tickets_embedding_outage(store):
+    class Shared:
+        embedding_outages = 0
+    retriever = Shared()
+    Dispatcher(store, "T-0002", retriever=retriever)  # T-0002: embeddings down for the whole run
+    assert retriever.embedding_outages == -1
+    Dispatcher(store, "T-0029", retriever=retriever)  # next ticket on the same retriever
+    assert retriever.embedding_outages == 0

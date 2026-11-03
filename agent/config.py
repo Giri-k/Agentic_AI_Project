@@ -14,6 +14,7 @@ load_dotenv(REPO / ".env")  # PORTKEY_API_KEY lives only in the git-ignored .env
 PORTKEY_BASE_URL = "https://api.portkey.ai/v1"
 CHAT_MODEL = os.getenv("OPENAI_MODEL", "@30875-fall26-openai/gpt-5-nano")
 EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "@30875-fall26-openai/text-embedding-3-small")
+MODEL_TIMEOUT_S = 60  # per API request; a hung call ends the run safely instead of stalling it
 
 # Per ticket, counted across resumes. 8 fits the approval demo: run to the pause, then resume to the refund.
 MAX_MODEL_CALLS = 8

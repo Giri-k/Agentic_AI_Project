@@ -23,7 +23,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { useTickets } from "../api";
+import { useHealth, useTickets } from "../api";
 import {
   Avatar,
   ChannelLabel,
@@ -42,6 +42,7 @@ const PAGE_SIZE = 15;
 // Filters and sorting live in the URL so inbox state survives a trip to a ticket.
 export function InboxPage() {
   const query = useTickets();
+  const health = useHealth();
   const client = useQueryClient();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -187,8 +188,17 @@ export function InboxPage() {
           <ShieldCheck size={17} />
         </span>
         <p>
-          <strong>Mock workspace.</strong> Runs and approvals are simulated.
-          Reset at any time to replay a demo.
+          {health.data?.adapter === "real" ? (
+            <>
+              <strong>Real agent.</strong> Runs call the model; refunds and
+              emails stay in the simulated store. Reset to replay a demo.
+            </>
+          ) : (
+            <>
+              <strong>Mock workspace.</strong> Runs and approvals are
+              simulated. Reset at any time to replay a demo.
+            </>
+          )}
         </p>
       </div>
       <section className="inbox-panel" aria-label="Ticket inbox">
