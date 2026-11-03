@@ -90,6 +90,17 @@ def test_demo_refund_needs_staff_approval_and_uses_it_once(store):
     assert again.value.code == "APPROVAL_ALREADY_USED"
 
 
+@pytest.mark.parametrize("ticket_id", [t for t in tickets_of("R7") if LABELS[t]["variant"] % 2 == 1])
+def test_an_approval_for_less_than_the_returned_item_is_a_conflict_not_a_partial_refund(store, ticket_id):
+    """R7: staff approved half of a whole-item return. POL-RET-02 says escalate, so Python refuses to refund."""
+    order_id = store.tickets[ticket_id]["order_ids"][0]
+    approval = store.approvals(order_id)[0]
+    assert approval["amount_cents"] < store.remaining_refundable_cents(order_id)
+    with pytest.raises(ToolError) as err:
+        refund(store, ticket_id, order_id=order_id, cents=approval["amount_cents"], approval_id=approval["approval_id"])
+    assert err.value.code == "APPROVAL_CONFLICT" and not store.refunds(order_id)
+
+
 @pytest.mark.parametrize("ticket_id", tickets_of("R8"))
 def test_refund_above_remaining_balance_is_refused(store, ticket_id):
     order_id = store.tickets[ticket_id]["order_ids"][0]

@@ -36,7 +36,7 @@ RESULTS = REPO / "results" / "eval"
 SYSTEMS = {"agent": agent_loop.run_ticket, "baseline": baseline.run_ticket}
 PAUSES = {"awaiting_customer", "awaiting_approval"}
 REFUND_GATE_CODES = {"NO_MATCHING_APPROVAL", "APPROVAL_ALREADY_USED", "EXCEEDS_REMAINING_BALANCE", "NOT_ELIGIBLE",
-                     "ORDER_NOT_FOUND", "WRONG_TICKET"}
+                     "APPROVAL_CONFLICT", "ORDER_NOT_FOUND", "WRONG_TICKET"}
 GROUPS = {"delivery": "Delivery", "returns_refunds": "Returns", "billing": "Billing", "cancellation": "Cancellation",
           "technical": "Tech/Account/Product", "account": "Tech/Account/Product",
           "product_inquiry": "Tech/Account/Product"}

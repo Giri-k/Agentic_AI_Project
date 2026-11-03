@@ -186,6 +186,12 @@ def process_refund(store, ctx, args):
         raise ToolError("EXCEEDS_REMAINING_BALANCE",
                         f"only {remaining} cents remain refundable; staff must reconcile (POL-RET-06)")
     basis = _refund_basis(store, order, approval)
+    if basis == "return_received" and args.cents < remaining:
+        # POL-RET-06: a whole-item return refunds what is left of the purchase. An approval for less contradicts
+        # the order, and POL-RET-02 sends that to staff instead of refunding part of it.
+        raise ToolError("APPROVAL_CONFLICT",
+                        f"the approval is for {args.cents} cents but {remaining} cents are refundable for this "
+                        "returned item; an approval that contradicts the order must be escalated (POL-RET-02)")
     refund = {"refund_id": store.next_id("refund"), "order_id": args.order_id, "amount_cents": args.cents,
               "approval_id": args.approval_id, "created_at": store.as_of, "status": "issued"}
     store.data["refunds"].append(refund)

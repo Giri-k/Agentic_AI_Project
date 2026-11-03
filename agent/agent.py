@@ -29,7 +29,7 @@ from .tools import CARD_NUMBER
 from .trace import Trace
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
-PROMPT_VERSIONS = {"classify": "classify_v1", "step": "agent_v1", "check": "check_v1"}
+PROMPT_VERSIONS = {"classify": "classify_v1", "step": "agent_v2", "check": "check_v1"}
 PROMPTS = {purpose: (PROMPT_DIR / f"{version}.txt").read_text() for purpose, version in PROMPT_VERSIONS.items()}
 
 RESUMABLE = {"awaiting_approval", "awaiting_customer", "failed_safe"}
