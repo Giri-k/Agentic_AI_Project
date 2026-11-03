@@ -5,7 +5,7 @@ from typing import Protocol
 from openai import OpenAI
 from pydantic import BaseModel
 
-from .config import CHAT_MODEL, EMBED_MODEL, MODEL_TIMEOUT_S, PORTKEY_BASE_URL
+from .config import CHAT_MODEL, EMBED_MODEL, MODEL_TIMEOUT_S, PORTKEY_BASE_URL, REASONING_EFFORT
 
 
 @lru_cache(maxsize=1)
@@ -35,13 +35,15 @@ class LLM(Protocol):
 class OpenAILLM:
     """Structured-output chat client. Uses the shared Portkey client unless a client is passed in."""
 
-    def __init__(self, model=CHAT_MODEL, client=None):
+    def __init__(self, model=CHAT_MODEL, client=None, reasoning_effort=REASONING_EFFORT):
         self.client = client if client is not None else _shared_client()
-        self.model, self.last_usage = model, None
+        self.model, self.reasoning_effort, self.last_usage = model, reasoning_effort, None
 
     def parse(self, messages, schema):
         """One model call. Raises ValueError on a refusal or an empty parse, so callers can fail safe."""
-        resp = self.client.chat.completions.parse(model=self.model, messages=messages, response_format=schema)
+        extra = {"reasoning_effort": self.reasoning_effort} if self.reasoning_effort else {}
+        resp = self.client.chat.completions.parse(model=self.model, messages=messages, response_format=schema,
+                                                  **extra)
         self.last_usage = getattr(resp, "usage", None)
         message = resp.choices[0].message
         if getattr(message, "refusal", None):

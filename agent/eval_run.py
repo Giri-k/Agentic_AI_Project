@@ -2,6 +2,7 @@
 
 Usage:  uv run python -m agent.eval_run [--split test|dev] [--systems agent,baseline] [--workers 6]
                                         [--tickets T-0001,T-0002] [--limit N] [--redo] [--tag name] [--rescore]
+                                        [--reasoning-effort minimal|low|medium|high]
 
 Each ticket runs on its own fresh copy of the store (runtime/eval/<run>/<ticket>/), so tickets never see
 each other's refunds or messages. Results go to results/eval/ (outside runtime/, so Reset never deletes them):
@@ -27,7 +28,7 @@ from pathlib import Path
 from . import agent as agent_loop
 from . import baseline
 from .agent import CANCEL_CLAIM, REFUND_CLAIM, _amounts_in, _cents_in
-from .config import CHAT_MODEL, DATA, POLICY_DIR, REPO, RUNTIME
+from .config import CHAT_MODEL, DATA, POLICY_DIR, REASONING_EFFORT, REPO, RUNTIME
 from .store import Store, load_jsonl
 from .tools import CARD_NUMBER
 
@@ -290,9 +291,43 @@ def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def build_run(run_id, system, split, rows, labels, model=CHAT_MODEL):
+def with_judge(rows, judge_path):
+    """Add the LLM judge's verdicts (agent.judge) to the rows, if that run has been judged. They are reported
+    separately and never change "passed", which stays on the deterministic checks."""
+    if not Path(judge_path).exists():
+        return rows
+    verdicts = {j["ticket_id"]: j for j in load_jsonl(judge_path)}
+    out = []
+    for row in rows:
+        j = verdicts.get(row["ticket_id"])
+        if j is None:
+            out.append(row)
+            continue
+        facts = [f["verdict"] for f in j["facts"]]
+        missing = [f["fact"] for f in j["facts"] if f["verdict"] != "stated"]
+        out.append({**row, "judge_replied": j["replied"], "judge_error": j["error"],
+                    "judge_facts_total": len(facts), "judge_facts_stated": facts.count("stated"),
+                    "judge_contradicted": "contradicted" in facts, "judge_unsupported_claims": j["unsupported_claims"],
+                    "notes": row["notes"] + [f"Judge: reply does not convey \"{f}\"." for f in missing]
+                    + [f"Judge: unsupported claim: {c}" for c in j["unsupported_claims"]]})
+    return out
+
+
+def judge_metrics(rows):
+    """The judge's numbers over the replies that were sent (a ticket with no reply has nothing to judge)."""
+    judged = [r for r in rows if r.get("judge_replied") and r.get("judge_error") is None]
+    if not any("judge_replied" in r for r in rows):
+        return {}
+    total = sum(r["judge_facts_total"] for r in judged)
+    return {"judge_fact_coverage": sum(r["judge_facts_stated"] for r in judged) / total if total else None,
+            "judge_contradicted_replies": sum(r["judge_contradicted"] for r in judged),
+            "judge_unsupported_replies": sum(bool(r["judge_unsupported_claims"]) for r in judged),
+            "judged_replies": len(judged), "judge_errors": sum(bool(r.get("judge_error")) for r in rows)}
+
+
+def build_run(run_id, system, split, rows, labels, model=CHAT_MODEL, judge_path=None, settings=None):
     """The run object the Evaluation page reads (same shape as its illustrative snapshots, plus extra metrics)."""
-    rows = sorted(rows, key=lambda r: r["ticket_id"])
+    rows = sorted(with_judge(rows, judge_path) if judge_path else rows, key=lambda r: r["ticket_id"])
     policies = {p.name: p.read_text() for p in sorted(POLICY_DIR.glob("*.md"))}
     return {
         "run_id": run_id, "system": system, "split": split,
@@ -301,7 +336,8 @@ def build_run(run_id, system, split, rows, labels, model=CHAT_MODEL):
         "policy_snapshot": f"policies-{_digest(policies)}", "model": model,
         "provenance": (f"Measured: {len(rows)} {split} tickets run by the {system} on {model}, each on a fresh "
                        "copy of the store, scored against the labels from the saved result and trace."),
-        "metrics": metrics(rows), "by_group": _by(rows, "group", "group"),
+        "settings": settings or {}, "metrics": {**metrics(rows), **judge_metrics(rows)},
+        "by_group": _by(rows, "group", "group"),
         "by_end_state": _by(rows, "expected_status", "status"), "tickets": rows,
     }
 
@@ -313,10 +349,17 @@ class _Worker(threading.local):
     llm = retriever = None
 
 
-def _default_tools():
+def _default_tools(reasoning_effort=None):
     from .llm import OpenAILLM, embed
     from .retrieval import Retriever
-    return OpenAILLM(), Retriever(embed_fn=embed)
+    return OpenAILLM(reasoning_effort=reasoning_effort or REASONING_EFFORT), Retriever(embed_fn=embed)
+
+
+def run_settings(system, reasoning_effort=None):
+    """What produced a run: model, reasoning effort and prompt versions (shown with the run's results)."""
+    prompts = agent_loop.PROMPT_VERSIONS if system == "agent" else {"single_pass": baseline.PROMPT_VERSION}
+    return {"model": CHAT_MODEL, "reasoning_effort": reasoning_effort or REASONING_EFFORT or "default (medium)",
+            "prompt_versions": prompts}
 
 
 def run_one(system, ticket_id, label, work, out, tools):
@@ -342,7 +385,7 @@ def run_one(system, ticket_id, label, work, out, tools):
 
 
 def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=False, tools=None,
-             results=RESULTS, runtime=RUNTIME):
+             results=RESULTS, runtime=RUNTIME, reasoning_effort=None):
     """Run (or finish) one system on the tickets and write its rows, traces and run file. Returns the run."""
     run_id = run_id or f"{system}-{split}"
     out = Path(results) / run_id
@@ -355,7 +398,7 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
     print(f"{run_id}: {len(ticket_ids)} tickets, {len(done)} already scored, {len(todo)} to run")
 
     local = _Worker()
-    make = tools or _default_tools
+    make = tools or (lambda: _default_tools(reasoning_effort))
 
     def thread_tools():
         if local.llm is None:
@@ -376,7 +419,8 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
             print(f"  [{n}/{len(todo)}] {row['ticket_id']} {mark} {row['actual_status']} "
                   f"({row['seconds']}s, {row['model_calls']} model calls)" + (f" {row['error']}" if row["error"] else ""))
 
-    run = build_run(run_id, system, split, [done[t] for t in ticket_ids if t in done], labels)
+    run = build_run(run_id, system, split, [done[t] for t in ticket_ids if t in done], labels,
+                    judge_path=out / "judge.jsonl", settings=run_settings(system, reasoning_effort))
     (Path(results) / f"{run_id}.json").write_text(json.dumps(run, indent=1))
     return run
 
@@ -407,7 +451,8 @@ def rescore(run_id, labels, results=RESULTS):
     rows = [rescore_row(r, labels[r["ticket_id"]], load_jsonl(out / "traces" / f"{r['ticket_id']}.jsonl"))
             for r in load_jsonl(out / "rows.jsonl")]
     (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    run = build_run(run_id, old["system"], old["split"], rows, labels, model=old.get("model", CHAT_MODEL))
+    run = build_run(run_id, old["system"], old["split"], rows, labels, model=old.get("model", CHAT_MODEL),
+                    judge_path=out / "judge.jsonl", settings=old.get("settings"))
     run["provenance"] += " Rescored from the saved traces against the current labels."
     (Path(results) / f"{run_id}.json").write_text(json.dumps(run, indent=1))
     return run
@@ -421,12 +466,14 @@ def summary_table(runs):
             "unauthorized_refunds_executed", "unsupported_replies", "correct_pauses", "expected_pauses",
             "avg_model_calls", "avg_tool_calls", "avg_tokens_in", "avg_tokens_out", "avg_seconds", "p95_seconds",
             "avg_model_latency_ms", "p95_model_latency_ms", "harness_errors"]
+    keys += [k for k in ("judge_fact_coverage", "judge_contradicted_replies", "judge_unsupported_replies")
+             if any(k in r["metrics"] for r in runs)]
     width = max([12, *(len(r["run_id"]) + 2 for r in runs)])
     lines = [f"{'metric':<32}" + "".join(f"{r['run_id']:>{width}}" for r in runs)]
     for key in keys:
         cells = []
         for r in runs:
-            v = r["metrics"][key]
+            v = r["metrics"].get(key)
             cells.append("—" if v is None else f"{v:.3f}" if isinstance(v, float) else str(v))
         lines.append(f"{key:<32}" + "".join(f"{c:>{width}}" for c in cells))
     return "\n".join(lines)
@@ -441,6 +488,8 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, help="only the first N tickets of the split (a quick check)")
     parser.add_argument("--redo", action="store_true", help="discard this run's saved rows and start again")
     parser.add_argument("--tag", help="suffix for the run ID, e.g. a prompt version")
+    parser.add_argument("--reasoning-effort", choices=["minimal", "low", "medium", "high"],
+                        help="the model's reasoning effort (default: the model's own, medium for gpt-5-nano)")
     parser.add_argument("--rescore", action="store_true",
                         help="score finished runs again against the current labels (no model calls)")
     args = parser.parse_args(argv)
@@ -452,14 +501,15 @@ def main(argv=None):
     if args.limit:
         ids = ids[: args.limit]
     if not args.rescore:
-        _default_tools()  # build the embedding cache once before threads start
+        _default_tools(args.reasoning_effort)  # build the embedding cache once before threads start
     runs = []
     for system in [s.strip() for s in args.systems.split(",")]:
         if system not in SYSTEMS:
             parser.error(f"unknown system {system!r}")
         run_id = f"{system}-{args.split}" + (f"-{args.tag}" if args.tag else "")
         runs.append(rescore(run_id, labels) if args.rescore
-                    else evaluate(system, args.split, ids, labels, args.workers, run_id, args.redo))
+                    else evaluate(system, args.split, ids, labels, args.workers, run_id, args.redo,
+                                  reasoning_effort=args.reasoning_effort))
     print("\n" + summary_table(runs))
     print(f"\nSaved to {RESULTS.relative_to(REPO)}/")
     return runs
