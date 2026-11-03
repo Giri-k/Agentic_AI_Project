@@ -164,23 +164,6 @@ orders, payments, approvals and refunds so every decision can be checked against
 
 ---
 
-## Status
-
-| Part | Status |
-|---|---|
-| Synthetic dataset + checker | ✅ Done |
-| 20 policies (v1.1) | ✅ Done |
-| Store, tools, dispatcher, staff script | ✅ Done |
-| Retrieval (embeddings + BM25) | ✅ Done |
-| Agent loop (prompt, pause/resume, schema repair) | ✅ Done |
-| Reply grounding check | ✅ Done |
-| Single-pass baseline | ✅ Done |
-| Support console on the real agent (RealAdapter) | ✅ Done |
-| Evaluation on the test split | ✅ Done (`results/eval/`) |
-| Report and demo recording | ⏳ Next |
-
----
-
 ## Getting started
 
 ```bash
