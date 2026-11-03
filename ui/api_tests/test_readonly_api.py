@@ -1,4 +1,4 @@
-"""Contract checks for the read-only UI milestone and its fixture isolation."""
+"""Read-only console routes: no answer or fault leaks, customer isolation, exact money, safe IDs, local CORS."""
 
 import hashlib
 import json
@@ -25,12 +25,13 @@ def source_tickets():
 
 
 @pytest.fixture
-def client(monkeypatch):
-    """Create a fresh mock API per test without using any real-agent state."""
-    monkeypatch.setenv("OPUS_ADAPTER", "mock")
+def client(tmp_path):
+    """A console on a fresh temp working store; nothing here calls the model."""
     from ui.api.main import create_app
+    from ui.api.real_adapter import RealAdapter
 
-    with TestClient(create_app()) as test_client:
+    adapter = RealAdapter(runtime=tmp_path, llm_factory=lambda: None, retriever_factory=lambda: None)
+    with TestClient(create_app(adapter=adapter)) as test_client:
         yield test_client
 
 
@@ -44,30 +45,8 @@ def all_keys(value):
 
 
 def file_hashes(paths):
-    """Snapshot source bytes for the fixture-immutability check."""
+    """Snapshot source bytes, to show the console never writes them."""
     return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
-
-
-def runtime_snapshot():
-    """Record existing runtime files without creating a runtime directory."""
-    runtime = ROOT / "runtime"
-    return {str(path.relative_to(runtime)): path.read_bytes()
-            for path in runtime.rglob("*") if path.is_file()} if runtime.exists() else None
-
-
-def test_health_identifies_mock_execution_and_disclosed_demo_budget(client):
-    """Scripted execution remains explicitly mocked and discloses its different call allowance."""
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["adapter"] == "mock"
-    assert body["as_of"] == "2026-10-20"
-    assert body["running"] is False
-    assert body["capabilities"]["run"] is True
-    assert body["capabilities"]["resume"] is True
-    assert body["limits"]["tool_calls"] == 8
-    assert body["backend_limits"]["tool_calls"] == 8
-    assert body["budget_notice"] is None
 
 
 def test_inbox_preserves_fixture_state_without_answer_leak(client, source_tickets, source_store):
@@ -89,7 +68,7 @@ def test_inbox_preserves_fixture_state_without_answer_leak(client, source_ticket
 
 
 def test_filters_and_case_insensitive_search_select_real_tickets(client):
-    """Inbox controls must operate on real fixture fields and compose correctly."""
+    """Inbox filters work on the real ticket fields and combine correctly."""
     demo = client.get("/api/tickets", params={"split": "demo"}).json()
     assert [row["ticket_id"] for row in demo] == ["T-0039"]
     assert len(client.get("/api/tickets", params={"split": "dev"}).json()) == 44
@@ -196,7 +175,7 @@ def test_policy_viewer_reads_actual_versions_and_sections(client):
     "/api/tickets/T-9999", "/api/policies/POL-NOT-REAL", "/api/policies/%2E%2E%2Fstore",
 ])
 def test_unknown_identifiers_and_traversal_have_no_details(client, path):
-    """Unknown IDs must fail rather than fall through to filesystem or fixture contents."""
+    """Unknown IDs must fail rather than fall through to filesystem contents."""
     response = client.get(path)
     assert response.status_code == 404
     assert isinstance(response.json()["detail"], str)
@@ -207,42 +186,23 @@ def test_invalid_filter_is_rejected(client):
     assert client.get("/api/tickets", params={"status": "invented-status"}).status_code == 422
 
 
-def test_reset_is_memory_only_and_public_views_are_isolated():
-    """Adapter creation, view mutation and reset must preserve source and runtime files."""
+def test_views_and_reset_never_change_the_dataset_or_policies(tmp_path):
+    """Opening, editing a returned view and resetting touch only the temp working store, never the sources."""
     from ui.api.main import create_app
-    from ui.api.mock_adapter import MockAdapter
+    from ui.api.real_adapter import RealAdapter
 
-    sources = list(DATA.glob("*")) + list((ROOT / "policies").glob("*.md"))
-    sources = [path for path in sources if path.is_file()]
-    before_sources, before_runtime = file_hashes(sources), runtime_snapshot()
-    adapter = MockAdapter()
+    sources = [path for path in list(DATA.glob("*")) + list((ROOT / "policies").glob("*.md")) if path.is_file()]
+    before = file_hashes(sources)
+    adapter = RealAdapter(runtime=tmp_path, llm_factory=lambda: None, retriever_factory=lambda: None)
     detail = adapter.get_ticket("T-0039")
     detail["orders"][0]["total_cents"] = 1
     detail["ticket"]["messages"].clear()
     fresh = adapter.get_ticket("T-0039")
-    assert fresh["orders"][0]["total_cents"] == 114900
-    assert fresh["ticket"]["messages"]
+    assert fresh["orders"][0]["total_cents"] == 114900 and fresh["ticket"]["messages"]
     with TestClient(create_app(adapter=adapter)) as client:
         assert client.post("/api/admin/reset").status_code == 200
-        assert client.get("/api/tickets/T-0039").json() == fresh
-    assert file_hashes(sources) == before_sources
-    assert runtime_snapshot() == before_runtime
-
-
-def test_real_mode_never_silently_falls_back_to_mock(monkeypatch):
-    """Selecting an unavailable real adapter must report the missing integration explicitly."""
-    from ui.api import main
-
-    def unavailable_real_adapter(name):
-        """Simulate an absent integration even after teammates add the actual module."""
-        raise ImportError("Real adapter intentionally unavailable for this test")
-
-    monkeypatch.setenv("OPUS_ADAPTER", "real")
-    monkeypatch.setattr(main, "import_module", unavailable_real_adapter)
-    with TestClient(main.create_app()) as real_client:
-        response = real_client.get("/api/health")
-        assert response.status_code == 503
-        assert "real" in response.json()["detail"].lower()
+        assert client.get("/api/tickets/T-0039").json()["orders"] == fresh["orders"]
+    assert file_hashes(sources) == before
 
 
 def test_cors_allows_local_ui_and_rejects_external_origins(client):

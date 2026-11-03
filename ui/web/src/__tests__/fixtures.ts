@@ -44,7 +44,7 @@ function policyFixture(id: string): Policy {
 export const policies = policyIds.map(policyFixture)
 
 export const health: Health = {
-  adapter: 'mock', as_of: store.as_of, running: false,
+  adapter: 'real', as_of: store.as_of, running: false,
   capabilities: { run: false, resume: false, approve: false, reset: true, trace: false, evaluation: false },
   limits: { model_calls: 8, tool_calls: 8, retries: 1, schema_repairs: 1, revisions: 1 },
 }

@@ -120,7 +120,7 @@ def _refund_basis(store, order, approval):
 # --- tools -----------------------------------------------------------------------
 
 def kb_lookup(store, ctx, args):
-    """Policy search. The retriever (embeddings + BM25 fallback) is plugged in by the next build step."""
+    """Search approved policy passages using the injected embeddings/BM25 retriever."""
     if ctx.retriever is None:
         raise ToolError("KB_UNAVAILABLE", "policy search is not configured", retryable=False)
     return ctx.retriever(args.query, args.k)
@@ -186,6 +186,14 @@ def process_refund(store, ctx, args):
         raise ToolError("EXCEEDS_REMAINING_BALANCE",
                         f"only {remaining} cents remain refundable; staff must reconcile (POL-RET-06)")
     basis = _refund_basis(store, order, approval)
+    if basis == "duplicate_capture":
+        # POL-BIL-02 / POL-RET-06: correct only the captured excess, less committed refunds.
+        # An exact staff approval still cannot authorize refunding the legitimate purchase payment.
+        correction_remaining = max(0, remaining - order["total_cents"])
+        if args.cents > correction_remaining:
+            raise ToolError("APPROVAL_CONFLICT",
+                            f"only {correction_remaining} cents remain eligible for a billing correction; "
+                            "the legitimate order payment must remain intact, so staff must reconcile the approval")
     if basis == "return_received" and args.cents < remaining:
         # POL-RET-06: a whole-item return refunds what is left of the purchase. An approval for less contradicts
         # the order, and POL-RET-02 sends that to staff instead of refunding part of it.

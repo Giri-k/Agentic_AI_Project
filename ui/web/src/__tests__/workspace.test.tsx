@@ -59,7 +59,7 @@ describe("read-only support workspace", () => {
     const user = workspace();
     const table = await screen.findByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(16);
-    expect(screen.getByText("MOCK")).toBeTruthy();
+    expect(screen.getByText("REAL")).toBeTruthy();
     await user.type(
       screen.getByRole("textbox", { name: "Search tickets" }),
       "t-0039",
@@ -207,7 +207,7 @@ describe("read-only support workspace", () => {
     available = true;
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("table")).toBeTruthy();
-    expect(await screen.findByText("MOCK")).toBeTruthy();
+    expect(await screen.findByText("REAL")).toBeTruthy();
     await waitFor(() =>
       expect(
         (
@@ -258,7 +258,7 @@ describe("read-only support workspace", () => {
     await screen.findByRole("heading", { name: /Policy library/ });
     await user.click(screen.getByRole("button", { name: "Reset workspace" }));
     let dialog = screen.getByRole("dialog", {
-      name: "Reset the mock workspace?",
+      name: "Reset the working store?",
     });
     await user.click(
       within(dialog).getByRole("button", { name: "Keep workspace" }),
@@ -275,7 +275,7 @@ describe("read-only support workspace", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(
       await screen.findByText(
-        "Mock workspace reset. Source data is unchanged.",
+        "Working store reset. Runs and traces were cleared.",
       ),
     ).toBeTruthy();
     const posts = fetchMock.mock.calls.filter(

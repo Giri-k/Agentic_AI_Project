@@ -88,7 +88,7 @@ def save(table, split, count, results=RESULTS):
     results.mkdir(parents=True, exist_ok=True)
     path = results / "retrieval.json"
     path.write_text(json.dumps({
-        "mock": False, "measured": True, "source": "python -m agent.eval_retrieval", "split": split,
+        "measured": True, "source": "python -m agent.eval_retrieval", "split": split,
         "tickets": count, "queries": count, "methods": table,
         "provenance": f"Measured: each of {count} {split} tickets' own text searched with embeddings and with BM25, "
                       "top 3 compared with the labelled policy IDs.",

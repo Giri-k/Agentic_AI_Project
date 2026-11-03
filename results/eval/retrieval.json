@@ -1,5 +1,4 @@
 {
- "mock": false,
  "measured": true,
  "source": "python -m agent.eval_retrieval",
  "split": "test",

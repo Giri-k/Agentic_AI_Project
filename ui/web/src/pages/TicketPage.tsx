@@ -31,7 +31,6 @@ import {
 } from "../api";
 import { TraceViewer } from "../components/TraceViewer";
 import { GraderPanel } from "../components/GraderPanel";
-import { DEMOS } from "../demo-scenarios";
 import {
   Avatar,
   ChannelLabel,
@@ -43,7 +42,7 @@ import {
   StatusBadge,
 } from "../components";
 import { date, humanize, money } from "../format";
-import type { Order, RunScenario, TicketDetail } from "../types";
+import type { Order, TicketDetail } from "../types";
 
 // Render only owned records returned by the API; inaccessible orders never trigger extra lookups.
 function OrderCard({ order, first }: { order: Order; first: boolean }) {
@@ -405,15 +404,6 @@ export function TicketPage() {
   const resume = useResumeTicket(id);
   const location = useLocation();
   const previous = (location.state as { from?: string } | null)?.from ?? "/";
-  const scenarioParam =
-    new URLSearchParams(location.search).get("scenario") ?? "standard";
-  const scenarioMatch = DEMOS.find(
-    (demo) => demo.ticketId === id && demo.scenario === scenarioParam,
-  );
-  const invalidScenario = scenarioParam !== "standard" && !scenarioMatch;
-  const requestedScenario = (
-    invalidScenario ? "standard" : scenarioParam
-  ) as RunScenario;
   const [traceOpen, setTraceOpen] = useState(false);
   useEffect(() => {
     document.title = `${id} · OP-US`;
@@ -469,26 +459,14 @@ export function TicketPage() {
   const detail = query.data;
   const ticket = detail.ticket;
   const execution = detail.execution;
-  const selectedDemo =
-    (detail.running || execution?.last_mode || detail.state.last_result) &&
-    execution?.scenario
-      ? DEMOS.find(
-          (demo) =>
-            demo.ticketId === id && demo.scenario === execution.scenario,
-        )
-      : scenarioMatch;
-  const requestedSystem =
-    typeof start.variables === "string"
-      ? start.variables
-      : start.variables?.system;
+  const requestedSystem = start.variables;
   const pending = start.isPending || resume.isPending;
   const busy = pending || detail.running || Boolean(health.data?.running);
   const canRun = Boolean(
     !busy &&
     !health.isError &&
     health.data?.capabilities.run &&
-    execution?.can_run &&
-    !invalidScenario,
+    execution?.can_run,
   );
   const canResume = Boolean(
     !busy &&
@@ -498,7 +476,7 @@ export function TicketPage() {
   );
   const actionError = start.error?.message ?? resume.error?.message;
   const blockingReason = detail.running
-    ? "The scripted run is in progress. Follow each step in the trace below."
+    ? "The agent is working. Follow each step in the trace below."
     : health.data?.running
       ? `Another run is in progress${health.data.active_ticket_id ? ` on ${health.data.active_ticket_id}` : ""}.`
       : !health.data?.capabilities.run
@@ -547,38 +525,6 @@ export function TicketPage() {
         </div>
         <StatusBadge status={detail.state.status} />
       </div>
-      {invalidScenario && (
-        <div className="execution-action-error" role="alert">
-          <Info size={16} />
-          <span>This demo selection is not available for this ticket.</span>
-          <Link className="text-link" to={`/tickets/${id}`}>
-            Use standard mode
-          </Link>
-        </div>
-      )}
-      {selectedDemo && selectedDemo.scenario !== "standard" && (
-        <div
-          className={`scenario-note ${selectedDemo.forced ? "scenario-note-forced" : ""}`}
-        >
-          <Info size={17} />
-          <div>
-            <strong>
-              {selectedDemo.forced ? "Forced test" : "Recovery demo"} ·{" "}
-              {selectedDemo.title}
-            </strong>
-            <p>
-              {selectedDemo.description}{" "}
-              {selectedDemo.forced
-                ? "This intentionally injected behavior is not a correct agent trajectory or an accuracy result."
-                : "Inspect the retry flag and replayed receipt in the trace."}
-            </p>
-          </div>
-          <Link to="/demos">
-            Demo lab
-            <ArrowUpRight size={13} />
-          </Link>
-        </div>
-      )}
       <section className="run-panel">
         <div className="run-overview">
           <span className="run-state-icon">
@@ -604,24 +550,19 @@ export function TicketPage() {
         <div className="run-actions">
           <span className="read-only-label">
             <ShieldCheck size={12} />
-            {health.data?.adapter === "mock"
-              ? "Scripted simulation"
-              : "Real agent"}
+            Real agent
           </span>
           <button
             className="button button-secondary"
-            disabled={!canRun || requestedScenario !== "standard"}
+            disabled={!canRun}
             onClick={() => {
               resume.reset();
               start.mutate("baseline");
             }}
             title={
-              requestedScenario !== "standard"
-                ? "Select standard mode to compare the baseline; forced scenarios are scripted agent tests."
-                : canRun
-                  ? "Run one retrieval and one model call"
-                  : (blockingReason ??
-                    "Reset the workspace for a fresh comparison")
+              canRun
+                ? "Run one retrieval and one model call"
+                : (blockingReason ?? "Reset the workspace for a fresh comparison")
             }
           >
             {start.isPending && requestedSystem === "baseline"
@@ -652,17 +593,11 @@ export function TicketPage() {
             disabled={!canRun}
             onClick={() => {
               resume.reset();
-              start.mutate(
-                requestedScenario === "standard"
-                  ? "agent"
-                  : { system: "agent", scenario: requestedScenario },
-              );
+              start.mutate("agent");
             }}
             title={
               canRun
-                ? health.data?.adapter === "real"
-                  ? "Start a real agent run (calls the model)"
-                  : "Start a scripted mock run"
+                ? "Start a real agent run (calls the model)"
                 : (blockingReason ?? "Reset the workspace to start a fresh run")
             }
           >

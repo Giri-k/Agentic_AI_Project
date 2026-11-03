@@ -23,6 +23,7 @@ from pydantic import ValidationError, model_validator
 
 from .config import CHAT_MODEL, KB_MAX_K, MAX_MODEL_CALLS, MAX_REVISIONS, MAX_SCHEMA_REPAIRS, MAX_TOOL_CALLS
 from .dispatcher import Budget, Dispatcher
+from .progress import load_progress, save_progress
 from .schemas import CATEGORY_TEAM, Category, Status, StopRun, Strict, TicketResult
 from .store import atomic_write
 from .tools import CARD_NUMBER
@@ -98,7 +99,9 @@ def resume(store, ticket_id, retriever, llm, run_id=None):
         raise StopRun("unknown_ticket")  # before reading its state
     checkpoint = load_checkpoint(store, ticket_id)
     status = store.ticket_state(ticket_id)["status"]
-    if checkpoint is None or status not in RESUMABLE:
+    progress = load_progress(store, ticket_id, "agent")
+    interrupted = bool(progress and progress.get("in_progress"))
+    if checkpoint is None or (status not in RESUMABLE and not (interrupted and status == "new")):
         raise ValueError(f"{ticket_id} is {status}; only a paused agent run can be resumed")
     return _AgentRun(store, ticket_id, retriever, llm, run_id or _new_id("resume"), checkpoint=checkpoint).execute()
 
@@ -110,6 +113,9 @@ def checkpoint_path(store, ticket_id):
 
 def load_checkpoint(store, ticket_id):
     """The saved agent state for a ticket, or None if the agent never ran it."""
+    progress = load_progress(store, ticket_id, "agent")
+    if progress and progress.get("checkpoint"):
+        return progress["checkpoint"]
     path = checkpoint_path(store, ticket_id)
     return json.loads(path.read_text()) if path.exists() else None
 
@@ -171,20 +177,23 @@ class _AgentRun:
                                    "evidence": {}, "model_fault": _model_fault(store, ticket_id), "runs": []}
         budget = Budget.from_dict(checkpoint["budget"]) if checkpoint else None
         self.trace = Trace(store.root, ticket_id, run_id)
-        self.d = Dispatcher(store, ticket_id, budget=budget, trace=self.trace, retriever=retriever)
+        self.in_progress = True
+        self.d = Dispatcher(store, ticket_id, budget=budget, trace=self.trace, retriever=retriever,
+                            on_progress=self._persist)
         self.budget = self.d.budget
-        self.previous = store.ticket_state(ticket_id)["last_result"] if checkpoint else None
+        self.previous = store.ticket_state(ticket_id).get("last_result") if checkpoint else None
         self.view = None      # ticket_get result: the records as Python read them at the start of this run
         self.results = []     # this run's tool results, as the model sees them
         self.problems = []    # problems the reply check found, shown to the model for its one revision
 
     def execute(self):
         """Run to a saved TicketResult. Every way out (finish, pause, escalation, stop) saves a valid result."""
+        self._persist()
         self._log("run_started", mode=self.mode, system="agent", model=getattr(self.llm, "model", CHAT_MODEL),
                   prompt_versions=PROMPT_VERSIONS)
         try:
             self.view = self._read_ticket()
-            if self.mode == "run":
+            if self.ckpt["category"] is None:
                 self._classify()
             result = self._loop()
         except StopRun as stop:
@@ -198,7 +207,7 @@ class _AgentRun:
 
     def _read_ticket(self):
         """Python's own ticket_get at the start of every run (and after a version conflict)."""
-        out = self._call("ticket_get", {"ticket_id": self.ticket_id})
+        out = self._call("ticket_get", {"ticket_id": self.ticket_id}, required_read=True)
         if not out["ok"]:
             self._stop(f"ticket_get_{out['error']['code'].lower()}")
         return out["result"]
@@ -210,6 +219,7 @@ class _AgentRun:
         out = self._model("classify", [{"role": "system", "content": PROMPTS["classify"]},
                                        {"role": "user", "content": json.dumps(content)}], Classification)
         self.ckpt["category"], self.ckpt["summary"] = out.category.value, out.summary
+        self._persist()
         self._log("route", category=out.category.value, team=CATEGORY_TEAM[out.category].value)
 
     def _loop(self):
@@ -242,6 +252,7 @@ class _AgentRun:
         else:
             entry["result"] = out["result"]
         self.results.append(entry)
+        self._persist()
         return None
 
     def _finish(self, finish):
@@ -261,6 +272,7 @@ class _AgentRun:
         if self.budget.revisions < MAX_REVISIONS and self._model_calls_left() >= 2:
             self.budget.revisions += 1
             self.problems = problems
+            self._persist()
             self._log("revision", n=self.budget.revisions, problems=problems)
             return None
         return self._save(Finish(status="escalated", response=None, citations=[], stop_reason="unsupported_reply",
@@ -355,6 +367,7 @@ class _AgentRun:
         if self.budget.schema_repairs >= MAX_SCHEMA_REPAIRS:
             self._stop("invalid_model_output")
         self.budget.schema_repairs += 1
+        self._persist()
         self._log("schema_repair", n=self.budget.schema_repairs, error=error)
         repair = messages + [{"role": "user", "content": f"Your last answer could not be used ({error}). "
                                                          "Answer again with only the structured object."}]
@@ -368,11 +381,13 @@ class _AgentRun:
         if self.budget.model_calls >= MAX_MODEL_CALLS:
             self._stop("model_budget")
         self.budget.model_calls += 1
+        self._persist()
         start, simulated, out, error = time.perf_counter(), False, None, None
         fault = self.ckpt["model_fault"]
         if purpose == "step" and self.ckpt["evidence"] and fault and fault["remaining"] != 0:
             fault["remaining"] -= 1 if fault["remaining"] > 0 else 0
             simulated, error = True, f"simulated {fault['error']}: the output was not valid JSON"
+            self._persist()
         else:
             try:
                 out = self.llm.parse(messages, schema)
@@ -433,12 +448,12 @@ class _AgentRun:
 
     # --- helpers ---
 
-    def _call(self, tool, args):
+    def _call(self, tool, args, *, required_read=False):
         """One dispatcher call. A temporary error is retried once; if the retry fails too, the run stops."""
         raw = json.dumps(args)
-        out = self.d.call(tool, raw)
+        out = self.d.call(tool, raw, required_read=required_read)
         if not out["ok"] and out["error"]["retryable"]:
-            out = self.d.call(tool, raw)
+            out = self.d.call(tool, raw, required_read=required_read)
             if not out["ok"]:
                 self._stop(f"{tool}_unavailable")
         return out
@@ -482,9 +497,17 @@ class _AgentRun:
         self.ckpt["budget"] = self.budget.to_dict()
         self.ckpt["runs"].append({"run_id": self.run_id, "mode": self.mode, "status": result.status.value,
                                   "stop_reason": result.stop_reason})
+        self.in_progress = False
+        self._persist()
         path = checkpoint_path(self.store, self.ticket_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(path, json.dumps(self.ckpt, indent=1))
+
+    def _persist(self):
+        """Keep the current checkpoint and budget with the store before each external action."""
+        self.ckpt["budget"] = self.d.budget.to_dict()
+        save_progress(self.store, self.ticket_id, "agent", self.d.budget, run_id=self.run_id,
+                      mode=self.mode, in_progress=self.in_progress, checkpoint=self.ckpt)
 
     def _stop(self, reason):
         """End the run now; execute() saves failed_safe with this reason."""

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  Activity,
   ArrowDownUp,
   ArrowUpRight,
   BookOpenText,
@@ -40,18 +39,24 @@ function percentage(value: number | null | undefined): string {
     : "Not measured";
 }
 
-// Every illustrative section carries its own label, including below the fold.
-function DataBadge({ mock }: { mock: boolean }) {
-  return mock ? (
-    <span className="eval-data-badge">
-      <FlaskConical size={11} />
-      MOCK DATA
-    </span>
-  ) : (
-    <span className="eval-real-badge">
-      <Activity size={11} />
-      SUPPLIED RESULTS
-    </span>
+const effortOf = (run: EvalRunSummary) =>
+  run.settings?.reasoning_effort?.replace("default (medium)", "medium") ?? null;
+const modelOf = (run: EvalRunSummary) =>
+  run.settings?.model?.split("/").at(-1) ?? null;
+
+function configuration(run: EvalRunSummary): string {
+  return `${modelOf(run) ?? "Model not recorded"} · ${effortOf(run) ? `${effortOf(run)} effort` : "effort not recorded"}`;
+}
+
+function matchingConfiguration(
+  first: EvalRunSummary,
+  second: EvalRunSummary,
+): boolean {
+  return Boolean(
+    modelOf(first) &&
+    effortOf(first) &&
+    modelOf(first) === modelOf(second) &&
+    effortOf(first) === effortOf(second),
   );
 }
 
@@ -67,6 +72,8 @@ function comparisonIssue(selected: EvalRun, other: EvalRun): string | null {
     return "Policy snapshot metadata is missing from one or both runs.";
   if (selected.policy_snapshot !== other.policy_snapshot)
     return "The selected runs use different policy snapshots.";
+  if (!matchingConfiguration(selected, other))
+    return "Matching model and reasoning settings must be recorded for both runs.";
   const selectedIds = selected.tickets
     .map((ticket) => ticket.ticket_id)
     .sort()
@@ -77,8 +84,6 @@ function comparisonIssue(selected: EvalRun, other: EvalRun): string | null {
     .join("|");
   if (selectedIds !== otherIds)
     return "The selected runs do not contain the same tickets.";
-  if (selected.mock !== other.mock)
-    return "Mock and real results cannot be treated as a measured system comparison.";
   return null;
 }
 
@@ -93,7 +98,7 @@ type MetricRow = {
 // One list of metrics for both tables, so the agent-versus-baseline view and the all-runs view always agree.
 const METRIC_ROWS: MetricRow[] = [
   {
-    label: "Overall success",
+    label: "Structural success",
     value: (run: Measured) => percentage(run.metrics.success_rate),
   },
   {
@@ -153,7 +158,7 @@ const METRIC_ROWS: MetricRow[] = [
     safety: true,
   },
   {
-    label: "Unsupported replies",
+    label: "Unsupported replies flagged structurally",
     value: (run: Measured) => numeric(run.metrics.unsupported_replies),
   },
   {
@@ -189,8 +194,7 @@ const METRIC_ROWS: MetricRow[] = [
   {
     label: "Average seconds per ticket",
     value: (run: Measured) =>
-      run.metrics.avg_seconds === null ||
-      run.metrics.avg_seconds === undefined
+      run.metrics.avg_seconds === null || run.metrics.avg_seconds === undefined
         ? "Not measured"
         : `${numeric(run.metrics.avg_seconds, 1)} s`,
   },
@@ -229,6 +233,15 @@ function ComparisonTable({
   const agent = selected.system === "agent" ? selected : counterpart;
   const baseline = selected.system === "baseline" ? selected : counterpart;
   const rows = METRIC_ROWS;
+  const primary = new Set([
+    "Structural success",
+    "Final-status accuracy",
+    "Unauthorized refunds attempted",
+    "Unauthorized refunds executed",
+    "Judge: replies with unsupported claims",
+    "Unsupported replies flagged structurally",
+    "Correct pauses / expected pauses",
+  ]);
   const table = (metrics: typeof rows) => (
     <div className="eval-table-scroll">
       <table className="eval-table eval-comparison-table">
@@ -237,11 +250,19 @@ function ComparisonTable({
             <th>Metric</th>
             <th>
               Adaptive agent
-              <DataBadge mock={agent.mock} />
+              <small>
+                {agent.run_id}
+                <br />
+                {configuration(agent)}
+              </small>
             </th>
             <th>
               Single-pass baseline
-              <DataBadge mock={baseline.mock} />
+              <small>
+                {baseline.run_id}
+                <br />
+                {configuration(baseline)}
+              </small>
             </th>
           </tr>
         </thead>
@@ -264,16 +285,20 @@ function ComparisonTable({
         Same {selected.split} split · {selected.tickets.length} tickets ·
         matching benchmark and policy snapshots
       </div>
-      {table(rows.slice(0, 5))}
+      <p className="eval-metric-definition">
+        Structural success checks saved outcomes and action evidence. Reply
+        meaning is evaluated separately by the semantic judge.
+      </p>
+      {table(rows.filter((row) => primary.has(row.label)))}
       <details className="eval-secondary-metrics">
-        <summary>Citations and execution costs</summary>
-        {table(rows.slice(5))}
+        <summary>Actions, reply support, citations and execution costs</summary>
+        {table(rows.filter((row) => !primary.has(row.label)))}
       </details>
     </>
   );
 }
 
-// Headline cards show raw safety numbers and their denominators without claiming mock proof of safety.
+// Headline cards show raw safety numbers next to their denominators.
 function HeadlineMetrics({ run }: { run: EvalRun }) {
   const metrics = run.metrics;
   return (
@@ -283,7 +308,6 @@ function HeadlineMetrics({ run }: { run: EvalRun }) {
     >
       <div className="eval-section-heading">
         <h2>Outcomes and safety</h2>
-        <DataBadge mock={run.mock} />
       </div>
       <div className="eval-headline-grid">
         <div className="eval-metric-card">
@@ -324,8 +348,27 @@ function HeadlineMetrics({ run }: { run: EvalRun }) {
             <TriangleAlert size={17} />
           </span>
           <h3>Unsupported replies</h3>
-          <strong>{numeric(metrics.unsupported_replies)}</strong>
-          <p>Reported reply count</p>
+          <strong
+            className={
+              typeof metrics.judge_unsupported_replies === "number"
+                ? ""
+                : "eval-unmeasured"
+            }
+          >
+            {numeric(metrics.judge_unsupported_replies)}
+            {typeof metrics.judged_replies === "number" && (
+              <small> / {numeric(metrics.judged_replies)} judged</small>
+            )}
+          </strong>
+          <p>
+            {typeof metrics.judge_unsupported_replies === "number"
+              ? `Semantic judge · ${numeric(metrics.judge_contradicted_replies)} contradictions`
+              : "Semantic judge has not supplied results"}
+          </p>
+          <p>
+            Structural flags: {numeric(metrics.unsupported_replies)} · Judge
+            errors: {numeric(metrics.judge_errors)}
+          </p>
         </div>
         <div className="eval-metric-card">
           <span className="eval-metric-icon">
@@ -373,7 +416,6 @@ function Breakdown({ run }: { run: EvalRun }) {
       <section className="panel eval-breakdown-panel">
         <div className="eval-section-heading">
           <h2>By scenario group</h2>
-          <DataBadge mock={run.mock} />
         </div>
         {run.by_group.length ? (
           <div className="eval-table-scroll">
@@ -407,7 +449,6 @@ function Breakdown({ run }: { run: EvalRun }) {
       <section className="panel eval-breakdown-panel">
         <div className="eval-section-heading">
           <h2>By expected end state</h2>
-          <DataBadge mock={run.mock} />
         </div>
         {run.by_end_state.length ? (
           <div className="eval-table-scroll">
@@ -455,7 +496,7 @@ function ticketOutcome(
       : "fail";
 }
 
-// Per-ticket links intentionally open current interactive state rather than pretending a mock benchmark has live traces.
+// Per-ticket links open the ticket's current workspace; benchmark traces stay with the evaluation files.
 function TicketResults({ run }: { run: EvalRun }) {
   const [search, setSearch] = useState("");
   const [outcome, setOutcome] = useState("all");
@@ -486,7 +527,6 @@ function TicketResults({ run }: { run: EvalRun }) {
           </h2>
           <p>Links open current ticket history, not a benchmark trace.</p>
         </div>
-        <DataBadge mock={run.mock} />
       </div>
       <div className="eval-ticket-toolbar">
         <label className="search-field">
@@ -581,7 +621,7 @@ function TicketResults({ run }: { run: EvalRun }) {
                         </Link>
                         <Link
                           to={`/tickets/${ticket.ticket_id}/trace`}
-                          title="Current interactive trace; not the illustrative evaluation run’s trace"
+                          title="The ticket’s current workspace trace, not the evaluation run’s"
                         >
                           Current trace
                           <ArrowUpRight size={11} />
@@ -637,16 +677,12 @@ function runVersion(summary: EvalRunSummary): string {
   return (tag || "v1").split("-")[0];
 }
 
-// Runs saved before the effort was configurable ran at the model's default, which is medium.
-const effortOf = (run: EvalRunSummary) =>
-  (run.settings?.reasoning_effort ?? "medium").replace("default (medium)", "medium");
-
 // Every measured run side by side: one column per run, one row per metric, test and dev split apart.
 function AllRunsTable({ runs }: { runs: EvalRunSummary[] }) {
   const measured = runs.filter((run) => run.metrics);
   if (!measured.length) return null;
   const order = (run: EvalRunSummary) =>
-    `${run.system === "agent" ? 0 : 1}-${runVersion(run)}-${["low", "medium", "high"].indexOf(effortOf(run))}`;
+    `${run.system === "agent" ? 0 : 1}-${runVersion(run)}-${["low", "medium", "high"].indexOf(effortOf(run) ?? "")}`;
   const splits = (["test", "dev"] as const)
     .map((split) => ({
       split,
@@ -656,19 +692,25 @@ function AllRunsTable({ runs }: { runs: EvalRunSummary[] }) {
     }))
     .filter((group) => group.runs.length);
   return (
-    <section className="panel eval-comparison-panel" aria-label="All runs compared">
+    <section
+      className="panel eval-comparison-panel"
+      aria-label="All runs compared"
+    >
       <div className="eval-section-heading">
         <div>
           <h2>All runs compared</h2>
-          <p>Every evaluation run side by side, by split.</p>
+          <p>
+            Every evaluation run by split. Columns retain their own model
+            settings; compare matching configurations and snapshots.
+          </p>
         </div>
-        <DataBadge mock={measured.some((run) => run.mock)} />
       </div>
       {splits.map(({ split, runs: group }) => (
         <div key={split} className="eval-all-runs-group">
           <h3>
             {split === "test" ? "Test" : "Development"} split ·{" "}
-            {typeof group[0].tickets === "number" ? group[0].tickets : ""} tickets
+            {typeof group[0].tickets === "number" ? group[0].tickets : ""}{" "}
+            tickets
           </h3>
           <div className="eval-table-scroll">
             <table className="eval-table eval-all-runs-table">
@@ -677,15 +719,19 @@ function AllRunsTable({ runs }: { runs: EvalRunSummary[] }) {
                   <th>Metric</th>
                   {group.map((run) => (
                     <th key={run.run_id} title={run.run_id}>
-                      {run.system === "agent" ? "Agent" : "Baseline"} {runVersion(run)}
-                      <small>{effortOf(run)} effort</small>
+                      {run.system === "agent" ? "Agent" : "Baseline"}{" "}
+                      {runVersion(run)}
+                      <small>{configuration(run)}</small>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {METRIC_ROWS.map((row) => (
-                  <tr key={row.label} className={row.safety ? "eval-safety-row" : ""}>
+                  <tr
+                    key={row.label}
+                    className={row.safety ? "eval-safety-row" : ""}
+                  >
                     <th scope="row">{row.label}</th>
                     {group.map((run) => (
                       <td key={run.run_id}>{row.value(run as Measured)}</td>
@@ -701,14 +747,13 @@ function AllRunsTable({ runs }: { runs: EvalRunSummary[] }) {
   );
 }
 
-// Retrieval figures are supplied results; viewing this page does not perform a new retrieval experiment.
+// Retrieval figures come from a saved measurement; viewing this page runs no new experiment.
 function RetrievalCard() {
   const query = useRetrievalMetrics();
   return (
     <details className="panel eval-retrieval-panel">
       <summary className="eval-section-heading">
         <strong>Policy retrieval details</strong>{" "}
-        {query.data && <DataBadge mock={query.data.mock} />}
       </summary>
       {query.isPending ? (
         <div className="eval-loading" role="status">
@@ -730,9 +775,9 @@ function RetrievalCard() {
           <div className="eval-retrieval-note">
             <Info size={14} />
             <p>
-              {query.data.mock || query.data.measured === false
-                ? "Illustrative figures; no new retrieval experiment was run."
-                : "Results supplied by the evaluation backend."}
+              {query.data.measured
+                ? "Measured with python -m agent.eval_retrieval."
+                : "Not measured yet."}
               <span>{query.data.provenance}</span>
             </p>
           </div>
@@ -808,14 +853,22 @@ export function EvaluationPage() {
     : available[0];
   const invalidRun = Boolean(requestedId && !summary && runs.isSuccess);
   const selected = useEvalRun(invalidFilters ? "" : (summary?.run_id ?? ""));
-  const otherSummary = summaries.find(
-    (run) =>
-      run.system !== system &&
-      run.split === split &&
-      (!summary?.benchmark_id || run.benchmark_id === summary.benchmark_id) &&
-      (!summary?.policy_snapshot ||
-        run.policy_snapshot === summary.policy_snapshot),
-  );
+  const otherSummary = summaries
+    .filter(
+      (run) =>
+        run.system !== system &&
+        run.split === split &&
+        (!summary?.benchmark_id || run.benchmark_id === summary.benchmark_id) &&
+        (!summary?.policy_snapshot ||
+          run.policy_snapshot === summary.policy_snapshot) &&
+        Boolean(summary && matchingConfiguration(summary, run)),
+    )
+    .sort(
+      (a, b) =>
+        Number(runVersion(b) === runVersion(summary!)) -
+          Number(runVersion(a) === runVersion(summary!)) ||
+        b.created_at.localeCompare(a.created_at),
+    )[0];
   const other = useEvalRun(
     invalidFilters || invalidRun ? "" : (otherSummary?.run_id ?? ""),
   );
@@ -829,7 +882,6 @@ export function EvaluationPage() {
     setParams(next, { replace: true });
   };
   const run = selected.data;
-  const mocked = Boolean(run?.mock ?? summary?.mock);
   return (
     <>
       <div className="page-heading">
@@ -951,20 +1003,15 @@ export function EvaluationPage() {
       ) : (
         run && (
           <>
-            <div
-              className={`eval-provenance-banner ${mocked ? "eval-provenance-mock" : ""}`}
-            >
+            <div className="eval-provenance-banner">
               <FlaskConical size={21} />
               <div>
-                <strong>
-                  {mocked
-                    ? "MOCK DATA · Illustrative benchmark results"
-                    : "Supplied evaluation results"}
-                </strong>
+                <strong>Measured results</strong>
                 <p>
-                  {mocked
-                    ? "Scripted figures for this dashboard; no live model performance was measured."
-                    : "Results supplied by the evaluation backend."}
+                  {configuration(run)}
+                  {run.settings?.prompt_versions?.step
+                    ? ` · prompt ${run.settings.prompt_versions.step}`
+                    : ""}
                 </p>
                 {run.provenance && (
                   <details className="eval-provenance-details">
@@ -990,15 +1037,14 @@ export function EvaluationPage() {
             <section className="panel eval-comparison-panel">
               <div className="eval-section-heading">
                 <h2>Agent versus baseline</h2>
-                <DataBadge mock={mocked} />
               </div>
               {!otherSummary ? (
                 <div className="eval-comparison-unavailable">
                   <Info size={21} />
                   <strong>No matching comparison run is available.</strong>
                   <p>
-                    A counterpart must use the same split, benchmark, and policy
-                    snapshot.
+                    A counterpart must use the same split, benchmark, policy
+                    snapshot, model, and recorded reasoning effort.
                   </p>
                 </div>
               ) : other.isPending ? (
@@ -1025,8 +1071,7 @@ export function EvaluationPage() {
             <TicketResults run={run} />
             <details className="panel eval-comparison-panel">
               <summary className="eval-section-heading">
-                <strong>Breakdowns by scenario and end state</strong>{" "}
-                <DataBadge mock={mocked} />
+                <strong>Breakdowns by scenario and end state</strong>
               </summary>
               <div className="eval-breakdown-content">
                 <Breakdown run={run} />

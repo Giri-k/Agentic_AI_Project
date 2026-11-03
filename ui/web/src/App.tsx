@@ -109,19 +109,17 @@ function Sidebar({ close }: { close: () => void }) {
   );
 }
 
-// Confirmation is explicit: mock mode resets memory, real mode wipes runtime/ runs, traces and the outbox.
+// Confirmation is explicit: a reset wipes runtime/ runs, traces and the outbox.
 function ResetDialog({
   onClose,
   onReset,
   pending,
   error,
-  real,
 }: {
   onClose: () => void;
   onReset: () => void;
   pending: boolean;
   error: string | null;
-  real: boolean;
 }) {
   const cancel = useRef<HTMLButtonElement>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -186,12 +184,12 @@ function ResetDialog({
           <RotateCcw size={23} />
         </div>
         <h2 id="reset-title">
-          {real ? "Reset the working store?" : "Reset the mock workspace?"}
+          Reset the working store?
         </h2>
         <p id="reset-description">
-          {real
-            ? "Delete every run, trace, checkpoint and sent reply in runtime/ and restore the dataset’s store. The dataset files and the embedding cache stay unchanged."
-            : "Restore the original ticket and store snapshot. Only the preview’s in-memory state is reset; the project’s source files stay unchanged."}
+          Delete every run, trace, checkpoint and sent reply in runtime/ and
+          restore the dataset’s store. The dataset files and the embedding cache
+          stay unchanged.
         </p>
         {error && (
           <p className="inline-error" role="alert">
@@ -242,11 +240,7 @@ export default function App() {
     onSuccess: async () => {
       await client.invalidateQueries();
       setResetOpen(false);
-      setNotice(
-        health.data?.adapter === "real"
-          ? "Working store reset. Runs and traces were cleared."
-          : "Mock workspace reset. Source data is unchanged.",
-      );
+      setNotice("Working store reset. Runs and traces were cleared.");
     },
   });
   useEffect(() => {
@@ -406,11 +400,7 @@ export default function App() {
             </span>
             <span
               className={`mode-badge ${health.isError ? "mode-offline" : ""}`}
-              title={
-                health.data?.adapter === "mock"
-                  ? "Local fixture preview. No model calls or real transactions."
-                  : "Real agent: model calls go to gpt-5-nano. Refunds and emails are still simulated."
-              }
+              title="Real agent: model calls go to gpt-5-nano. Refunds and emails are still simulated."
             >
               <FlaskConical size={13} />
               {health.isError
@@ -423,9 +413,7 @@ export default function App() {
               title={
                 health.data?.running
                   ? "Wait for the current run to finish"
-                  : health.data?.adapter === "real"
-                    ? "Reset the working store"
-                    : "Restore the mock workspace"
+                  : "Reset the working store"
               }
               disabled={
                 !health.data?.capabilities.reset ||
@@ -489,7 +477,6 @@ export default function App() {
           onReset={() => reset.mutate()}
           pending={reset.isPending}
           error={reset.error?.message ?? null}
-          real={health.data?.adapter === "real"}
         />
       )}
       {notice && (

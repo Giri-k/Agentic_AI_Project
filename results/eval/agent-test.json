@@ -3,7 +3,6 @@
  "system": "agent",
  "split": "test",
  "created_at": "2026-11-03T19:46:18+00:00",
- "mock": false,
  "measured": true,
  "benchmark_id": "test-d88112fcd2f3",
  "policy_snapshot": "policies-afa48fad0d73",

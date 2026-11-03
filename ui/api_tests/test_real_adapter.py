@@ -1,14 +1,19 @@
 """RealAdapter through the HTTP routes: real store, tools, agent and baseline, with a scripted model (no network)."""
 
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
 
+from agent import agent as agent_loop
 from agent.agent import Classification, Finish, ReplyCheck, Step
 from agent.baseline import BaselineOutput, IntendedAction
 from agent.schemas import Category, Status
+from agent.staff import approve as staff_approve, staged_approvals
+from agent.store import Store
 from ui.api.main import create_app
 from ui.api.real_adapter import RealAdapter
 
@@ -85,7 +90,7 @@ def test_health_reports_real_mode_and_backend_limits(demo):
     body = demo.get("/api/health").json()
     assert body["adapter"] == "real" and body["running"] is False
     assert body["limits"]["model_calls"] == 8 and body["limits"]["tool_calls"] == 8
-    assert body["budget_notice"] is None and body["capabilities"]["reset"] is True
+    assert body["capabilities"]["reset"] is True
 
 
 def test_inbox_and_detail_read_the_working_store(demo):
@@ -148,15 +153,83 @@ def test_baseline_run_gets_run_events_and_numbered_model_call(tmp_path):
         assert trace[0]["event"] == "run_started" and trace[0]["system"] == "baseline"
         assert trace[-1]["event"] == "run_finished" and trace[-1]["status"] == "resolved"
         assert [e["n"] for e in trace if e["event"] == "model_call"] == [1]
+        lookups = [i for i, e in enumerate(trace) if e["event"] == "tool_request" and e["tool"] == "kb_lookup"]
+        models = [i for i, e in enumerate(trace) if e["event"] == "model_call"]
+        assert len(lookups) == 1 and lookups[0] < models[0]  # one retrieval, before the only model call
+
+
+def test_resume_requires_the_paused_orders_exact_approval_amount(demo):
+    demo.post("/api/tickets/T-0039/run", json={"system": "agent"})
+    wait_idle(demo)
+    store = Store(demo.app.state.adapter.root)
+    staged = staged_approvals()["APR-8013"]
+    store.data["approvals"].extend([
+        {**staged, "approval_id": "APR-WRONG-AMOUNT", "amount_cents": 1},
+        {**staged, "approval_id": "APR-WRONG-ORDER", "order_id": "O-60001"},
+    ])
+    store.save()
+    detail = demo.get("/api/tickets/T-0039").json()
+    assert detail["execution"]["can_resume"] is False
+    assert "exact order and amount" in detail["execution"]["resume_blocked_reason"]
+    assert demo.post("/api/tickets/T-0039/resume").status_code == 400
+    assert demo.get("/api/tickets/T-0039").json()["execution"]["budget"] == detail["execution"]["budget"]
+
+
+def test_resume_does_not_guess_an_unknown_refund_amount(demo):
+    demo.post("/api/tickets/T-0039/run", json={"system": "agent"})
+    wait_idle(demo)
+    store = Store(demo.app.state.adapter.root)
+    store.ticket_state("T-0039")["last_result"]["unresolved_requirements"] = ["staff approval required"]
+    staff_approve(store, "APR-8013")
+    detail = demo.get("/api/tickets/T-0039").json()
+    assert detail["execution"]["pending_refund"]["amount_cents"] is None
+    assert detail["execution"]["can_resume"] is False
+    assert "establish the exact refund order and amount" in detail["execution"]["resume_blocked_reason"]
+
+
+def test_interrupted_refund_has_live_counters_and_can_finish_without_another_refund(tmp_path):
+    class Interrupted(BaseException):
+        pass
+
+    class InterruptAfterRefund(ScriptedLLM):
+        def parse(self, messages, schema):
+            if not self.outputs:
+                raise Interrupted()
+            return super().parse(messages, schema)
+
+    store = Store.reset(tmp_path)
+    # The initial pause need not send the optional customer message.
+    pause = ScriptedLLM(Classification(category=Category.RETURNS_REFUNDS, summary="returned item"),
+                        step("kb_lookup", query="returned item refund"),
+                        finish("awaiting_approval", None, ["POL-RET-02"], ["staff approval for 114900 cents"]))
+    agent_loop.run_ticket(store, "T-0039", retriever, pause, run_id="first")
+    staff_approve(store, "APR-8013")
+    with pytest.raises(Interrupted):
+        agent_loop.resume(store, "T-0039", retriever, InterruptAfterRefund(
+            step("process_refund", order_id="O-60048", cents=114900, approval_id="APR-8013")), run_id="interrupted")
+
+    llm = ScriptedLLM(finish("resolved", "Your refund of $1,149.00 has been issued.", ["POL-RET-02"]), OK)
+    with make_client(tmp_path, llm) as client:
+        detail = client.get("/api/tickets/T-0039").json()
+        assert detail["execution"]["budget"]["model_calls"] == 5
+        assert detail["execution"]["budget"]["tool_calls"] == 5
+        assert detail["execution"]["can_resume"] is True
+        assert len(detail["orders"][0]["refunds"]) == 1
+        assert client.post("/api/tickets/T-0039/resume").status_code == 202
+        done = wait_idle(client, "T-0039")
+        assert done["state"]["status"] == "resolved"
+        assert done["execution"]["budget"]["tool_calls"] == 8
+        assert done["execution"]["budget"]["model_calls"] == 7
+        assert len(done["orders"][0]["refunds"]) == 1
+        assert len(done["sent_messages"]) == 1
 
 
 def test_run_rules_reset_and_grader(demo):
-    assert demo.post("/api/tickets/T-0055/run", json={"system": "agent", "scenario": "refund_gate"}).status_code == 400
     assert demo.post("/api/tickets/T-0039/run", json={"system": "agent"}).status_code == 202
     wait_idle(demo)
     assert demo.post("/api/tickets/T-0039/run", json={"system": "agent"}).status_code == 409
     expected = demo.get("/api/tickets/T-0039/expected").json()
-    assert expected["mock"] is False and expected["final_status"] == "awaiting_approval"
+    assert expected["final_status"] == "awaiting_approval"
     assert demo.post("/api/admin/reset").json()["orders"] > 0
     fresh = demo.get("/api/tickets/T-0039").json()
     assert fresh["state"]["status"] == "new" and fresh["sent_messages"] == [] and fresh["execution"]["can_run"]
@@ -177,22 +250,87 @@ def test_a_console_error_saves_failed_safe_and_frees_the_worker(tmp_path):
         assert client.get("/api/health").json()["running"] is False
 
 
-def test_evaluation_page_shows_measured_results_once_they_exist(tmp_path):
+def test_evaluation_shows_measured_results_and_nothing_made_up_before_them(tmp_path):
     results = tmp_path / "results"
     adapter = RealAdapter(runtime=tmp_path / "rt", llm_factory=lambda: None, retriever_factory=lambda: retriever,
                           results=results)
     with TestClient(create_app(adapter=adapter)) as client:
-        assert all(r["mock"] for r in client.get("/api/eval/runs").json())  # nothing measured yet
-        assert client.get("/api/eval/retrieval").json()["mock"] is True
+        assert client.get("/api/eval/runs").json() == []  # nothing measured yet, and nothing invented
+        empty = client.get("/api/eval/retrieval").json()
+        assert empty["measured"] is False and empty["methods"] == []
         results.mkdir()
         run = {"run_id": "agent-test", "system": "agent", "split": "test", "created_at": "2026-11-02T00:00:00Z",
-               "mock": False, "measured": True, "provenance": "Measured", "benchmark_id": "test-1", "policy_snapshot": "p-1",
-               "metrics": {}, "by_group": [],
+               "measured": True, "provenance": "Measured", "benchmark_id": "test-1", "policy_snapshot": "p-1",
+               "metrics": {"success_rate": 0.5}, "settings": {"reasoning_effort": "low"}, "by_group": [],
                "by_end_state": [], "tickets": []}
         (results / "agent-test.json").write_text(json.dumps(run))
-        (results / "retrieval.json").write_text(json.dumps({"mock": False, "measured": True, "methods": []}))
+        (results / "retrieval.json").write_text(json.dumps({"measured": True, "methods": []}))
         runs = client.get("/api/eval/runs").json()
-        assert [r["run_id"] for r in runs] == ["agent-test"] and runs[0]["mock"] is False
+        assert [r["run_id"] for r in runs] == ["agent-test"]
+        assert runs[0]["metrics"]["success_rate"] == 0.5 and runs[0]["settings"]["reasoning_effort"] == "low"
         assert client.get("/api/eval/runs/agent-test").json()["measured"] is True
-        assert client.get("/api/eval/runs/mock-agent-test-v1").status_code == 404
-        assert client.get("/api/eval/retrieval").json()["mock"] is False
+        assert client.get("/api/eval/runs/unknown").status_code == 404
+        assert client.get("/api/eval/retrieval").json()["measured"] is True
+
+
+def test_grader_waits_for_a_finished_run_then_uses_the_after_resume_label(demo):
+    """Before a run nothing is graded; after resume the approved refund is no longer forbidden."""
+    before = demo.get("/api/tickets/T-0039/expected").json()
+    assert before["grading"]["state"] == "not_run" and all(c["passed"] is None for c in before["grading"]["checks"])
+    assert "expected_actions" not in json.dumps(demo.get("/api/tickets/T-0039").json())  # labels stay out of tickets
+    demo.post("/api/tickets/T-0039/run", json={"system": "agent"})
+    wait_idle(demo)
+    paused = demo.get("/api/tickets/T-0039/expected").json()
+    assert paused["phase"] == "initial" and paused["grading"]["state"] in {"passed", "failed"}
+    assert next(c for c in paused["grading"]["checks"] if c["key"] == "response_facts")["passed"] is None
+    demo.post("/api/approvals/APR-8013/approve")
+    demo.post("/api/tickets/T-0039/resume")
+    wait_idle(demo)
+    resumed = demo.get("/api/tickets/T-0039/expected").json()
+    assert resumed["phase"] == "after_resume" and resumed["final_status"] == "resolved"
+    assert "process_refund" not in resumed["forbidden_actions"]
+    args = next(c for c in resumed["grading"]["checks"] if c["key"] == "tool_args")
+    assert args["passed"] is True and args["actual"]["process_refund"][0]["cents"] == 114900
+
+
+def test_invalid_actions_fail_without_changing_records(demo):
+    """Unknown IDs and unsupported requests never look like a success, and change nothing."""
+    initial = demo.get("/api/tickets/T-0039").json()
+    assert demo.post("/api/tickets/T-9999/run", json={"system": "agent"}).status_code == 404
+    assert demo.post("/api/tickets/T-9999/resume").status_code == 404
+    assert demo.post("/api/approvals/APR-9999/approve").status_code == 404
+    assert demo.post("/api/tickets/T-0039/resume").status_code == 400
+    assert demo.post("/api/tickets/T-0039/run", json={"system": "other"}).status_code == 422
+    assert demo.post("/api/tickets/T-0039/run", json={"system": "agent", "scenario": "refund_gate"}).status_code == 422
+    assert demo.get("/api/tickets/T-0039/trace", params={"since": -1}).status_code == 422
+    assert demo.get("/api/tickets/T-0039").json() == initial
+
+
+class HeldLLM(ScriptedLLM):
+    """Waits for the test to release it, so a run can be caught while it is in progress."""
+
+    def __init__(self, *outputs):
+        super().__init__(*outputs)
+        self.release = threading.Event()
+
+    def parse(self, messages, schema):
+        assert self.release.wait(10), "the test never released the model"
+        return super().parse(messages, schema)
+
+
+def test_one_active_run_blocks_competing_actions(tmp_path):
+    """Parallel clicks, another run, reset and staff approval all wait for the running ticket."""
+    llm = HeldLLM(*DEMO_SCRIPT)
+    with make_client(tmp_path, llm) as client:
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                responses = list(pool.map(lambda _: client.post("/api/tickets/T-0039/run", json={"system": "agent"}),
+                                          range(2)))
+            assert sorted(r.status_code for r in responses) == [202, 409]
+            assert client.get("/api/health").json()["running"] is True
+            assert client.post("/api/tickets/T-0029/run", json={"system": "baseline"}).status_code == 409
+            assert client.post("/api/admin/reset").status_code == 409
+            assert client.post("/api/approvals/APR-8013/approve").status_code == 409
+        finally:
+            llm.release.set()
+            wait_idle(client)

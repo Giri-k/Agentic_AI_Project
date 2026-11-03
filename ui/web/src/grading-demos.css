@@ -1,6 +1,5 @@
-/* These additions expose mock test intent and draft labels without changing the existing workspace layout. */
+/* The Demo lab and the optional grader, without changing the existing workspace layout. */
 .lab-note,
-.scenario-note,
 .grader-warning {
   display: flex;
   gap: 10px;
@@ -15,7 +14,6 @@
   margin-bottom: 20px;
 }
 .lab-note svg,
-.scenario-note > svg,
 .grader-warning > svg {
   margin-top: 3px;
 }
@@ -56,11 +54,6 @@
   letter-spacing: 0.6px;
   padding: 4px 6px;
 }
-.demo-kind-forced {
-  background: #fcf2e9;
-  border-color: #edd7c1;
-  color: #8b6134;
-}
 .demo-card h2 {
   font-size: 18px;
   font-weight: 650;
@@ -88,38 +81,8 @@
 .demo-inspect svg {
   margin-top: 3px;
 }
-.demo-card > p.demo-forced-disclosure {
-  font-size: 10px;
-  color: #7f663d;
-  margin-bottom: 18px;
-}
 .demo-card > .button {
   margin-top: auto;
-}
-.scenario-note {
-  margin: -5px 0 18px;
-  background: #f1f7e9;
-  border-color: #d8e6ca;
-  color: #4b6d36;
-}
-.scenario-note-forced {
-  background: #fff5e9;
-  border-color: #ead4b4;
-  color: #805c2d;
-}
-.scenario-note strong {
-  display: block;
-  font-size: 12px;
-}
-.scenario-note p {
-  margin-top: 3px;
-}
-.scenario-note a {
-  margin-left: auto;
-  white-space: nowrap;
-  align-self: center;
-  font-weight: 650;
-  font-size: 10px;
 }
 .grader-panel {
   margin: 20px 0;
@@ -332,12 +295,6 @@
   .demo-grid {
     grid-template-columns: 1fr;
   }
-  .scenario-note {
-    flex-wrap: wrap;
-  }
-  .scenario-note a {
-    margin-left: 25px;
-  }
   .grader-context {
     gap: 9px;
   }
@@ -367,9 +324,6 @@
   }
   .grader-warning {
     padding: 10px;
-  }
-  .scenario-note {
-    font-size: 10px;
   }
   .grader-context {
     font-size: 9px;

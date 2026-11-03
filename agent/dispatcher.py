@@ -66,13 +66,14 @@ def action_key(ticket_id, tool, args):
 class Dispatcher:
     """Runs the model's tool calls for one ticket under the budget, permission and idempotency rules."""
 
-    def __init__(self, store, ticket_id, budget=None, trace=None, retriever=None):
+    def __init__(self, store, ticket_id, budget=None, trace=None, retriever=None, on_progress=None):
         if ticket_id not in store.tickets:
             raise StopRun("unknown_ticket")
         self.store, self.ticket_id = store, ticket_id
         self.customer_id = store.tickets[ticket_id]["customer_id"]
         self.budget = budget or Budget.for_ticket(store, ticket_id)
         self.trace, self.retriever = trace, retriever
+        self.on_progress = on_progress
         injected = store.failure_injection(ticket_id) or {}
         if retriever is not None and injected.get("service") == "embeddings":
             # simulated outage: kb_lookup must fall back to BM25
@@ -85,16 +86,21 @@ class Dispatcher:
         """The tool list sent to the model (native function calling)."""
         return openai_tools()
 
-    def call(self, name, raw_args):
+    def call(self, name, raw_args, *, required_read=False):
         """Handle one tool call from the model. Returns {"ok": True, "result": ...} or {"ok": False, "error": ...};
         raises StopRun when the run must end."""
+        if required_read and name != "ticket_get":
+            raise ValueError("only Python's required ticket_get may bypass the model repetition counter")
         self._n += 1
         call_id = f"{self.trace.run_id if self.trace else 'run'}-t{self._n}"
         sig = f"{name}:{canonical(raw_args)}"
-        self._log("tool_request", call_id=call_id, tool=name, args=canonical(raw_args))
+        self._log("tool_request", call_id=call_id, tool=name, args=canonical(raw_args),
+                  origin="framework" if required_read else "model")
 
-        self.budget.seen[sig] = self.budget.seen.get(sig, 0) + 1
-        if self.budget.seen[sig] >= IDENTICAL_CALL_STOP:
+        if not required_read:
+            self.budget.seen[sig] = self.budget.seen.get(sig, 0) + 1
+        self._persist()
+        if not required_read and self.budget.seen[sig] >= IDENTICAL_CALL_STOP:
             self._log("stop", call_id=call_id, reason="repeated_call", tool=name)
             raise StopRun("repeated_call")
 
@@ -117,6 +123,7 @@ class Dispatcher:
         if is_retry:
             self.budget.retries += 1
             self.budget.awaiting_retry.remove(sig)
+        self._persist()  # charge the attempt before a tool or process can be interrupted
 
         try:
             result = self._execute(name, spec, args)
@@ -130,6 +137,8 @@ class Dispatcher:
         except StopRun as stop:
             self._log("stop", call_id=call_id, reason=stop.reason, tool=name)
             raise
+        finally:
+            self._persist()
         self._log("tool_result", call_id=call_id, tool=name, ok=True, result=result, retry=is_retry)
         return {"ok": True, "result": result}
 
@@ -156,6 +165,11 @@ class Dispatcher:
         self.store.data["receipts"][key] = result
         self.store.ticket_state(self.ticket_id)["actions"].append({"type": name, "receipt_id": result["receipt_id"]})
         self.store.save()
+
+    def _persist(self):
+        """Persist execution counters when the caller owns a durable workflow."""
+        if self.on_progress is not None:
+            self.on_progress()
 
     def _fault_hits(self, name):
         """Is an injected failure for this tool still pending?"""

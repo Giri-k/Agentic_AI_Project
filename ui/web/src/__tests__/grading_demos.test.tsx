@@ -48,16 +48,14 @@ afterEach(() => {
 });
 
 // The grader compares only explicit fields; wording correctness remains unverified.
-function expectedFixture(informational = false) {
+function expectedFixture() {
   return {
-    ticket_id: informational ? "T-0055" : "T-0039",
-    scenario_type: informational ? "X1" : "R5",
+    ticket_id: "T-0039",
+    scenario_type: "R5",
     category: "returns_refunds",
     team: "Returns",
-    final_status: informational ? "awaiting_customer" : "awaiting_approval",
-    policy_ids: informational
-      ? ["POL-SEC-01", "POL-RET-01"]
-      : ["POL-RET-01", "POL-RET-02"],
+    final_status: "awaiting_approval",
+    policy_ids: ["POL-RET-01", "POL-RET-02"],
     expected_actions: [
       "ticket_get",
       "kb_lookup",
@@ -72,13 +70,13 @@ function expectedFixture(informational = false) {
     warning:
       "Draft fixture labels and scripted results are not independent evaluation evidence.",
     grading: {
-      state: informational ? "informational" : "passed",
+      state: "passed",
       checks: [
         {
           key: "status",
           label: "Final status",
-          expected: informational ? "awaiting_customer" : "awaiting_approval",
-          actual: informational ? "awaiting_customer" : "awaiting_approval",
+          expected: "awaiting_approval",
+          actual: "awaiting_approval",
           passed: true,
         },
         {
@@ -90,14 +88,12 @@ function expectedFixture(informational = false) {
           note: "Semantic grounding requires independent human review.",
         },
       ],
-      notes: informational
-        ? ["Forced gate test. It is not a standard agent pass."]
-        : ["Only deterministic fields are checked."],
+      notes: ["Only deterministic fields are checked."],
     },
   };
 }
 
-describe("grader isolation and explicit demo selection", () => {
+describe("grader isolation and the demo lab", () => {
   it("keeps expected answers unfetched until the grader is explicitly enabled", async () => {
     const scenario = executionFixture();
     await scenario.fetch("/api/tickets/T-0039/run", {
@@ -130,28 +126,7 @@ describe("grader isolation and explicit demo selection", () => {
     expect(screen.queryByText("Checked fields match")).toBeNull();
   });
 
-  it("labels a forced gate comparison informational instead of declaring an agent pass", async () => {
-    const scenario = executionFixture();
-    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const path = new URL(String(input), "http://localhost:5173").pathname;
-      if (path === "/api/tickets/T-0055/expected")
-        return new Response(JSON.stringify(expectedFixture(true)), {
-          headers: { "Content-Type": "application/json" },
-        });
-      return scenario.fetch(input, init);
-    };
-    const { user } = workspace("/tickets/T-0055?scenario=refund_gate", fetcher);
-    await user.click(
-      await screen.findByRole("checkbox", { name: "Grader view" }),
-    );
-    expect(await screen.findByText("Informational test")).toBeTruthy();
-    expect(screen.queryByText("Checked fields match")).toBeNull();
-    expect(
-      screen.getByText(/Forced gate test. It is not a standard agent pass/i),
-    ).toBeTruthy();
-  });
-
-  it("routes the timeout demo to the right ticket and sends an explicit scenario selector", async () => {
+  it("opens a demo ticket from the lab and runs it like any other ticket", async () => {
     const scenario = executionFixture();
     const demo = detailFixture("T-0052")!;
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -188,13 +163,13 @@ describe("grader isolation and explicit demo selection", () => {
     const links = await screen.findAllByRole("link");
     const timeout = links.find(
       (link) =>
-        link.getAttribute("href") === "/tickets/T-0052?scenario=timeout_retry",
+        link.getAttribute("href") === "/tickets/T-0052",
     );
     expect(timeout).toBeTruthy();
     await user.click(timeout!);
     const run = await screen.findByRole("button", { name: "Run agent" });
     await waitFor(() => expect(run).toBeEnabled());
-    expect(screen.getByRole("button", { name: "Run baseline" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run baseline" })).toBeEnabled();
     await user.click(run);
     await waitFor(() =>
       expect(
@@ -208,9 +183,6 @@ describe("grader isolation and explicit demo selection", () => {
       ([url, init]) =>
         String(url).endsWith("/T-0052/run") && init?.method === "POST",
     )!;
-    expect(JSON.parse(String(request[1]?.body))).toEqual({
-      system: "agent",
-      scenario: "timeout_retry",
-    });
+    expect(JSON.parse(String(request[1]?.body))).toEqual({ system: "agent" });
   });
 });

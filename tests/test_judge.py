@@ -1,6 +1,7 @@
 """The LLM judge on saved traces, with a fake model (no network)."""
 
 import json
+import pytest
 
 from agent import eval_run, judge
 from agent.judge import FactVerdict, Judgement
@@ -64,3 +65,79 @@ def test_a_judge_answer_with_the_wrong_number_of_verdicts_is_an_error_and_is_ret
 
 def test_no_reply_means_nothing_to_judge():
     assert judge.build_case(LABELS["T-0039"], []) is None
+
+
+def stated():
+    return verdicts(("return received", "stated"), ("refund waiting on staff approval", "stated"))
+
+
+def test_judge_reuses_a_verdict_only_for_the_same_label_trace_and_prompt(tmp_path, monkeypatch):
+    results = finished_run(tmp_path)
+    first = FakeJudge(stated())
+    judge.judge_run("agent-demo", LABELS, workers=1, llm_factory=lambda: first, results=results)
+    assert len(first.seen) == 1
+    judge.judge_run("agent-demo", LABELS, workers=1, results=results,
+                    llm_factory=lambda: pytest.fail("unchanged verdict should be reused"))
+
+    changed = {**LABELS, "T-0039": {**LABELS["T-0039"], "response_facts": ["different expected fact"]}}
+    second = FakeJudge(verdicts(("different expected fact", "missing")))
+    run = judge.judge_run("agent-demo", changed, workers=1, llm_factory=lambda: second, results=results)
+    assert len(second.seen) == 1 and run["metrics"]["judge_fact_coverage"] == 0
+
+    monkeypatch.setattr(judge, "PROMPT", judge.PROMPT + "\nA revised judging instruction.")
+    third = FakeJudge(verdicts(("different expected fact", "stated")))
+    run = judge.judge_run("agent-demo", changed, workers=1, llm_factory=lambda: third, results=results)
+    assert len(third.seen) == 1 and run["metrics"]["judge_fact_coverage"] == 1
+
+
+def test_replacing_an_execution_requires_a_new_judgement_even_for_the_same_ticket(tmp_path):
+    results = finished_run(tmp_path)
+    judge.judge_run("agent-demo", LABELS, workers=1, llm_factory=lambda: FakeJudge(stated()), results=results)
+    eval_run.evaluate("agent", "demo", ["T-0039"], LABELS, workers=1, run_id="agent-demo", redo=True,
+                      tools=lambda: (pause_script(), retriever), results=results, runtime=tmp_path / "runtime")
+    fresh = FakeJudge(verdicts(("return received", "missing"), ("refund waiting on staff approval", "stated")))
+    run = judge.judge_run("agent-demo", LABELS, workers=1, llm_factory=lambda: fresh, results=results)
+    assert len(fresh.seen) == 1 and run["metrics"]["judge_fact_coverage"] == 0.5
+
+
+def test_judge_uses_the_original_policy_evidence_after_the_live_policies_change(tmp_path, monkeypatch):
+    results = finished_run(tmp_path)
+    original = eval_run.policy_texts()
+    changed = {**original, "POL-RET-02": "A replacement policy which was not used by this execution."}
+    monkeypatch.setattr(eval_run, "policy_texts", lambda: changed)
+    fake = FakeJudge(stated())
+    run = judge.judge_run("agent-demo", LABELS, workers=1, llm_factory=lambda: fake, results=results)
+    assert fake.seen[0]["policies"]["POL-RET-02"] == original["POL-RET-02"]
+    assert run["policy_snapshot"] == eval_run.policy_snapshot(original)
+
+
+def test_legacy_verdicts_without_execution_fingerprints_are_not_reused(tmp_path):
+    results = finished_run(tmp_path)
+    judge.judge_run("agent-demo", LABELS, workers=1, llm_factory=lambda: FakeJudge(stated()), results=results)
+    path = results / "agent-demo" / "judge.jsonl"
+    old = json.loads(path.read_text())
+    del old["fingerprint"]
+    path.write_text(json.dumps(old) + "\n")
+    refreshed = FakeJudge(stated())
+    judge.judge_run("agent-demo", LABELS, workers=1, llm_factory=lambda: refreshed, results=results)
+    assert len(refreshed.seen) == 1
+
+
+def test_judging_fails_before_client_creation_when_original_policy_evidence_is_unavailable(tmp_path, monkeypatch):
+    results = finished_run(tmp_path)
+    (results / "agent-demo" / "manifest.json").unlink()
+    monkeypatch.setattr(judge, "policy_texts", lambda: {})
+    with pytest.raises(ValueError, match="original policy snapshot is unavailable"):
+        judge.judge_run("agent-demo", LABELS, results=results,
+                        llm_factory=lambda: pytest.fail("must not construct a client"))
+
+
+def test_no_reply_harness_failure_needs_no_judge_client_or_missing_trace(tmp_path):
+    def unavailable():
+        raise RuntimeError("No client")
+
+    eval_run.evaluate("agent", "demo", ["T-0039"], LABELS, workers=1, run_id="failed-demo",
+                      tools=unavailable, results=tmp_path / "results", runtime=tmp_path / "runtime")
+    run = judge.judge_run("failed-demo", LABELS, workers=1, results=tmp_path / "results",
+                          llm_factory=lambda: pytest.fail("no sent reply needs no judge client"))
+    assert run["metrics"]["judged_replies"] == 0

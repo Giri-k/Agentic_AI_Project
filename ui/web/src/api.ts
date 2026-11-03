@@ -9,7 +9,6 @@ import type {
   Policy,
   PolicySummary,
   RetrievalMetrics,
-  RunScenario,
   TicketDetail,
   TicketSummary,
   TraceEvent,
@@ -115,20 +114,13 @@ function useExecutionRefresh() {
 export function useStartRun(ticketId: string) {
   const refresh = useExecutionRefresh();
   return useMutation({
-    mutationFn: (
-      input:
-        | "agent"
-        | "baseline"
-        | { system: "agent" | "baseline"; scenario: RunScenario },
-    ) =>
+    mutationFn: (system: "agent" | "baseline") =>
       request<{ run_id: string }>(
         `/tickets/${encodeURIComponent(ticketId)}/run`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            typeof input === "string" ? { system: input } : input,
-          ),
+          body: JSON.stringify({ system }),
         },
       ),
     onSuccess: refresh,
@@ -180,7 +172,7 @@ export function useExpected(
   });
 }
 
-// Evaluation displays server-provided snapshots; it never derives benchmark accuracy from live mock runs.
+// Evaluation shows saved, measured runs; it never derives accuracy from the live workspace.
 export const useEvalRuns = () =>
   useQuery({
     queryKey: ["eval-runs"],

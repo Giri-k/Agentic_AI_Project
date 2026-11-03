@@ -343,14 +343,6 @@ function EventRow({
           : "Decision recorded";
     kind = "model";
     Icon = Bot;
-  } else if (event.event === "demo_notice") {
-    title = "Scripted test context";
-    detail =
-      typeof event.text === "string"
-        ? event.text
-        : "Inspect the mock scenario context.";
-    kind = "warning";
-    Icon = TriangleAlert;
   } else if (event.event === "staff_approval") {
     title = "Staff approval activated";
     const approval = record(event.approval);
@@ -497,7 +489,6 @@ export function TraceViewer({
   const execution = ticket.data?.execution;
   const budget = execution?.budget ?? EMPTY_BUDGET;
   const limits = execution?.limits ?? health.data?.limits;
-  const notice = execution?.budget_notice ?? health.data?.budget_notice;
   const counters = [
     { key: "model_calls", label: "Model calls" },
     { key: "tool_calls", label: "Tool calls" },
@@ -579,12 +570,6 @@ export function TraceViewer({
           })}
         </div>
       </div>
-      {notice && (
-        <div className="trace-budget-notice">
-          <TriangleAlert size={14} />
-          <p>{notice}</p>
-        </div>
-      )}
       <div className="trace-filters">
         <label>
           <input

@@ -18,8 +18,9 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from .config import CHAT_MODEL, KB_MAX_K
-from .dispatcher import Dispatcher
+from .config import CHAT_MODEL, KB_MAX_K, MAX_MODEL_CALLS
+from .dispatcher import Budget, Dispatcher
+from .progress import load_progress, save_progress
 from .schemas import Category, Status, StopRun, Strict, TicketResult
 from .trace import Trace
 
@@ -51,25 +52,47 @@ class BaselineOutput(Strict):
 
 def run_ticket(store, ticket_id, retriever, llm, run_id="baseline"):
     """Run the single pass for one ticket and return its TicketResult (failed_safe if anything goes wrong)."""
+    return _run(store, ticket_id, retriever, llm, run_id, resuming=False)
+
+
+def _run(store, ticket_id, retriever, llm, run_id, *, resuming):
+    """Each invocation stays single pass; saved counters remain per ticket."""
+    if ticket_id not in store.tickets:
+        raise StopRun("unknown_ticket")
+    saved = load_progress(store, ticket_id, "baseline") if resuming else None
+    if resuming and saved is None:
+        raise ValueError("No saved baseline budget; restore a fresh snapshot before running this ticket again")
+    budget = Budget.from_dict(saved["budget"]) if saved else Budget.for_ticket(store, ticket_id)
+    progress = {"category": Category((saved.get("checkpoint") or {}).get("category", DEFAULT_CATEGORY))
+                if saved else DEFAULT_CATEGORY}
+    mode = "resume" if resuming else "run"
+    active = True
+
+    def persist():
+        save_progress(store, ticket_id, "baseline", budget, run_id=run_id, mode=mode,
+                      in_progress=active, checkpoint={"category": progress["category"].value})
+
     trace = Trace(store.root, ticket_id, run_id)
-    d = Dispatcher(store, ticket_id, trace=trace, retriever=retriever)  # raises StopRun for an unknown ticket
-    progress = {"category": DEFAULT_CATEGORY}
+    d = Dispatcher(store, ticket_id, budget=budget, trace=trace, retriever=retriever, on_progress=persist)
+    persist()
     try:
         result = _single_pass(store, d, trace, ticket_id, llm, progress)
     except StopRun as stop:  # budget spent or repeated call
         result = _failed(d, store, ticket_id, progress["category"], f"baseline_{stop.reason}")
+    active = False
+    persist()
     trace.log("final_result", system="baseline", result=result.model_dump(mode="json"))
     return result
 
 
 def resume(store, ticket_id, retriever, llm, run_id="baseline-resume"):
-    """A resumed ticket is a new invocation: fresh retrieval, fresh model call, fresh budget, on the CURRENT records."""
-    return run_ticket(store, ticket_id, retriever, llm, run_id=run_id)
+    """Fresh retrieval and one model call on current records, using the remaining lifetime budget."""
+    return _run(store, ticket_id, retriever, llm, run_id, resuming=True)
 
 
 def _single_pass(store, d, trace, ticket_id, llm, progress):
     """Fetch, retrieve once, call the model once, run its actions, save. Returns the TicketResult."""
-    got = d.call("ticket_get", json.dumps({"ticket_id": ticket_id}))
+    got = d.call("ticket_get", json.dumps({"ticket_id": ticket_id}), required_read=True)
     if not got["ok"]:
         return _failed(d, store, ticket_id, DEFAULT_CATEGORY, f"baseline_ticket_get_{got['error']['code']}")
     view = got["result"]
@@ -82,7 +105,10 @@ def _single_pass(store, d, trace, ticket_id, llm, progress):
                                                         "prior_refunds_on_other_orders": view.get("prior_refunds_on_other_orders", []),
                                                         "policy_passages": passages, "policy_search": note})}]
 
+    if d.budget.model_calls >= MAX_MODEL_CALLS:
+        raise StopRun("model_budget")
     d.budget.model_calls += 1
+    d._persist()
     start = time.monotonic()
     try:
         out = llm.parse(messages, BaselineOutput)
@@ -94,6 +120,7 @@ def _single_pass(store, d, trace, ticket_id, llm, progress):
         return _failed(d, store, ticket_id, DEFAULT_CATEGORY, reason)
     _log_model_call(trace, llm, passages, start, ok=True, n_actions=len(out.intended_actions))
     progress["category"] = out.category
+    d._persist()
 
     receipts = _run_actions(d, ticket_id, out)
     try:

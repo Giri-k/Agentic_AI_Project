@@ -56,8 +56,6 @@ sequenceDiagram
     C->>A: "I returned my ThinkPad (O-60048), refund $1,149"
     A->>D: ticket_get, kb_lookup
     D-->>A: return received like new · no approval · POL-RET-01, POL-RET-02
-    A->>D: process_refund(O-60048, 114900, APR-8013)
-    D-->>A: NO_MATCHING_APPROVAL
     A->>D: ticket_update(awaiting_approval)
     D->>S: state saved (version 2)
     H->>S: approve APR-8013
@@ -93,6 +91,7 @@ agent/
   store.py           working store in runtime/, safe writes, balance and lookup helpers
   tools.py           the 6 tools and their permission checks
   dispatcher.py      the only path from a model tool call to a tool
+  progress.py        durable budgets and execution checkpoints alongside action receipts
   retrieval.py       policy chunks, embeddings + cosine, BM25 fallback
   llm.py             Portkey client and embeddings
   agent.py           the agent loop: classify, act step by step, check the reply, pause/resume
@@ -132,10 +131,11 @@ under a context Python builds from the ticket (the model never passes a customer
 
 ### Dispatcher rules
 
-- **Budgets:** 6 tool calls per ticket, counted across resumes. Only calls that reach a tool count; unknown tools and invalid arguments are refused for free.
-- **Repeat stop:** the third identical call (same tool, same arguments in any order) ends the run as `failed_safe`.
+- **Budgets:** 8 model calls and 8 tool calls per ticket, counted across resumes for both systems. Attempts are charged before execution and saved with the working store, so an interruption cannot restore an older allowance. Unknown tools and invalid arguments do not consume tool calls.
+- **Repeat stop:** the third identical model-requested call (same tool, same arguments in any order) ends the run as `failed_safe`. Python's mandatory ticket re-reads consume the lifetime tool budget without counting as model repetition.
 - **Retries:** a temporary error is returned with `retryable: true`; the model may retry once per ticket.
 - **Action keys:** built by Python from ticket + tool + arguments. Repeating an action returns the saved receipt, so a retry can never refund twice.
+- **Recovery:** the working store keeps the current budget and agent checkpoint atomically with receipts. The checkpoint JSON file is a readable compatibility copy. Legacy baseline runs without saved counters need a fresh snapshot before another run.
 - **Injected failures:** test tickets can simulate timeouts, version conflicts and embedding outages. A timeout on a write happens *after* the write (the reply is "lost"), which tests the action keys.
 
 ### Retrieval
@@ -197,11 +197,11 @@ uv run pytest
 uv run python -m agent.eval_retrieval --split test --save
 
 # 5. Evaluate the agent and the baseline (uses the key); rerun the same command to finish an interrupted run
-uv run python -m agent.eval_run --split dev --tag v2                         # 44 dev tickets
-uv run python -m agent.eval_run --split test --tag v2                        # 115 test tickets
-uv run python -m agent.eval_run --split dev --tag v2-high --reasoning-effort high
-uv run python -m agent.eval_run --split test --tag v2 --rescore              # re-score saved runs, no model calls
-uv run python -m agent.judge --runs agent-test-v2,baseline-test-v2           # judge what the replies say
+uv run python -m agent.eval_run --split dev --tag local                     # 44 dev tickets
+uv run python -m agent.eval_run --split test --tag local                    # 115 test tickets
+uv run python -m agent.eval_run --split dev --tag local-high --reasoning-effort high
+uv run python -m agent.eval_run --split test --tag local --rescore          # re-score local rows/traces, no model calls
+uv run python -m agent.judge --runs agent-test-local,baseline-test-local    # judge the saved replies
 
 # 6. Staff actions used in the demo
 uv run python -m agent.staff reset              # fresh working store in runtime/
@@ -211,3 +211,19 @@ uv run python -m agent.staff status T-0039      # show the saved ticket state
 # Rebuild and check the dataset (needs the raw Bitext/Kaggle CSVs outside the repo)
 python data/generate.py && python data/check_dataset.py
 ```
+
+### Evaluation cache and saved results
+
+New evaluations record an execution manifest with the code, prompts, model settings, ticket inputs,
+store snapshot and policies. Repeating the same command resumes only when those inputs match.
+Use a new `--tag` after changing code/settings, or `--redo` to replace an existing run. A redo discards
+the old rows, traces and judge verdicts. Label changes require explicit `--rescore` or a fresh run;
+semantic verdicts are also checked against the exact replies, labels, policies and judge configuration.
+
+The committed `results/eval/*.json` files are historical measured summaries. Their original per-ticket
+rows, traces and manifests stay in the ignored run folders. Retain those folders for reproducibility.
+A summary without its original evidence cannot be resumed, rescored or judged; restore its evidence
+or choose a fresh tag. Historical runs without manifests cannot be silently reused for new execution.
+
+Deterministic success and unsupported-claim checks describe the rule-based checks. Semantic judge
+findings are reported separately; a deterministic pass does not establish that every reply is grounded.
