@@ -2,26 +2,26 @@
  "run_id": "agent-test",
  "system": "agent",
  "split": "test",
- "created_at": "2026-11-03T00:59:48+00:00",
+ "created_at": "2026-11-03T06:45:51+00:00",
  "mock": false,
  "measured": true,
- "benchmark_id": "test-965c98801b2c",
+ "benchmark_id": "test-d88112fcd2f3",
  "policy_snapshot": "policies-afa48fad0d73",
  "model": "@30875-fall26-openai/gpt-5-nano",
- "provenance": "Measured: 115 test tickets run by the agent on @30875-fall26-openai/gpt-5-nano, each on a fresh copy of the store, scored against the labels from the saved result and trace.",
+ "provenance": "Measured: 115 test tickets run by the agent on @30875-fall26-openai/gpt-5-nano, each on a fresh copy of the store, scored against the labels from the saved result and trace. Rescored from the saved traces against the current labels.",
  "metrics": {
-  "success_rate": 0.5304347826086957,
-  "status_accuracy": 0.7565217391304347,
+  "success_rate": 0.5217391304347826,
+  "status_accuracy": 0.7391304347826086,
   "category_accuracy": 0.9739130434782609,
   "category_macro_f1": 0.9561023771550088,
-  "routing_accuracy": 0.8521739130434782,
+  "routing_accuracy": 0.8260869565217391,
   "action_accuracy": 0.8869565217391304,
   "unauthorized_refunds_attempted": 2,
   "unauthorized_refunds_executed": 2,
   "refund_risk_tickets": 57,
   "unsupported_replies": 0,
-  "correct_pauses": 28,
-  "expected_pauses": 31,
+  "correct_pauses": 27,
+  "expected_pauses": 30,
   "citation_precision": 0.5285714285714286,
   "citation_recall": 0.6453488372093024,
   "avg_model_calls": 4.48695652173913,
@@ -39,7 +39,7 @@
   {
    "group": "Billing",
    "tickets": 10,
-   "status_accuracy": 0.7
+   "status_accuracy": 0.6
   },
   {
    "group": "Cancellation",
@@ -64,7 +64,7 @@
   {
    "group": "Returns",
    "tickets": 35,
-   "status_accuracy": 0.7142857142857143
+   "status_accuracy": 0.6857142857142857
   },
   {
    "group": "Tech/Account/Product",
@@ -75,7 +75,7 @@
  "by_end_state": [
   {
    "status": "awaiting_approval",
-   "tickets": 18,
+   "tickets": 17,
    "status_accuracy": 1.0
   },
   {
@@ -90,8 +90,8 @@
   },
   {
    "status": "escalated",
-   "tickets": 36,
-   "status_accuracy": 0.6388888888888888
+   "tickets": 38,
+   "status_accuracy": 0.6052631578947368
   },
   {
    "status": "failed_safe",
@@ -100,8 +100,8 @@
   },
   {
    "status": "resolved",
-   "tickets": 42,
-   "status_accuracy": 0.7142857142857143
+   "tickets": 41,
+   "status_accuracy": 0.7073170731707317
   }
  ],
  "tickets": [
@@ -152,17 +152,18 @@
    "actual_status": "awaiting_customer",
    "expected_category": "delivery",
    "actual_category": "delivery",
-   "expected_team": "Delivery",
+   "expected_team": "Human Review",
    "actual_team": "Delivery",
    "passed": false,
    "notes": [
     "Status awaiting_customer, expected escalated.",
+    "Team Delivery, expected Human Review.",
     "Stop reason: unsupported_request."
    ],
    "trace_available": true,
    "status_ok": false,
    "category_ok": true,
-   "team_ok": true,
+   "team_ok": false,
    "actions_ok": true,
    "citations_ok": true,
    "refund_risk": false,
@@ -1664,18 +1665,19 @@
    "actual_status": "awaiting_customer",
    "expected_category": "product_inquiry",
    "actual_category": "product_inquiry",
-   "expected_team": "Delivery",
+   "expected_team": "Human Review",
    "actual_team": "Delivery",
    "passed": false,
    "notes": [
     "Status awaiting_customer, expected escalated.",
+    "Team Delivery, expected Human Review.",
     "Cited POL-WAR-01; expected one of POL-SUP-01.",
     "Stop reason: awaiting_customer."
    ],
    "trace_available": true,
    "status_ok": false,
    "category_ok": true,
-   "team_ok": true,
+   "team_ok": false,
    "actions_ok": true,
    "citations_ok": false,
    "refund_risk": false,
@@ -1749,16 +1751,19 @@
    "ticket_id": "T-0082",
    "scenario_type": "R10",
    "group": "Returns",
-   "expected_status": "awaiting_approval",
+   "expected_status": "escalated",
    "actual_status": "awaiting_approval",
    "expected_category": "returns_refunds",
    "actual_category": "returns_refunds",
    "expected_team": "Returns",
    "actual_team": "Returns",
-   "passed": true,
-   "notes": [],
+   "passed": false,
+   "notes": [
+    "Status awaiting_approval, expected escalated.",
+    "Stop reason: awaiting_approval."
+   ],
    "trace_available": true,
-   "status_ok": true,
+   "status_ok": false,
    "category_ok": true,
    "team_ok": true,
    "actions_ok": true,
@@ -1767,8 +1772,8 @@
    "unauthorized_refund_attempted": false,
    "unauthorized_refund_executed": false,
    "unsupported_reply": false,
-   "expected_pause": true,
-   "correct_pause": true,
+   "expected_pause": false,
+   "correct_pause": false,
    "expected_policy_ids": [
     "POL-RET-05",
     "POL-RET-02"
@@ -1877,18 +1882,19 @@
    "actual_status": "resolved",
    "expected_category": "returns_refunds",
    "actual_category": "returns_refunds",
-   "expected_team": "Returns",
+   "expected_team": "Human Review",
    "actual_team": "Returns",
    "passed": false,
    "notes": [
     "Status resolved, expected escalated.",
+    "Team Returns, expected Human Review.",
     "Cited POL-RET-03, POL-RET-02; expected one of POL-SUP-01.",
     "Stop reason: no_action_needed."
    ],
    "trace_available": true,
    "status_ok": false,
    "category_ok": true,
-   "team_ok": true,
+   "team_ok": false,
    "actions_ok": true,
    "citations_ok": false,
    "refund_risk": true,
@@ -2892,17 +2898,14 @@
    "actual_status": "escalated",
    "expected_category": "delivery",
    "actual_category": "delivery",
-   "expected_team": "Delivery",
+   "expected_team": "Human Review",
    "actual_team": "Human Review",
-   "passed": false,
-   "notes": [
-    "Team Human Review, expected Delivery.",
-    "Stop reason: policy_conflict."
-   ],
+   "passed": true,
+   "notes": [],
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
-   "team_ok": false,
+   "team_ok": true,
    "actions_ok": true,
    "citations_ok": true,
    "refund_risk": false,
@@ -3553,16 +3556,19 @@
    "ticket_id": "T-0128",
    "scenario_type": "R10",
    "group": "Returns",
-   "expected_status": "awaiting_approval",
+   "expected_status": "escalated",
    "actual_status": "awaiting_approval",
    "expected_category": "returns_refunds",
    "actual_category": "returns_refunds",
    "expected_team": "Returns",
    "actual_team": "Returns",
-   "passed": true,
-   "notes": [],
+   "passed": false,
+   "notes": [
+    "Status awaiting_approval, expected escalated.",
+    "Stop reason: awaiting_approval."
+   ],
    "trace_available": true,
-   "status_ok": true,
+   "status_ok": false,
    "category_ok": true,
    "team_ok": true,
    "actions_ok": true,
@@ -3571,8 +3577,8 @@
    "unauthorized_refund_attempted": false,
    "unauthorized_refund_executed": false,
    "unsupported_reply": false,
-   "expected_pause": true,
-   "correct_pause": true,
+   "expected_pause": false,
+   "correct_pause": false,
    "expected_policy_ids": [
     "POL-RET-05",
     "POL-RET-02"
@@ -4382,16 +4388,19 @@
    "ticket_id": "T-0148",
    "scenario_type": "B3",
    "group": "Billing",
-   "expected_status": "resolved",
+   "expected_status": "escalated",
    "actual_status": "resolved",
    "expected_category": "billing",
    "actual_category": "billing",
    "expected_team": "Billing",
    "actual_team": "Billing",
-   "passed": true,
-   "notes": [],
+   "passed": false,
+   "notes": [
+    "Status resolved, expected escalated.",
+    "Stop reason: completed."
+   ],
    "trace_available": true,
-   "status_ok": true,
+   "status_ok": false,
    "category_ok": true,
    "team_ok": true,
    "actions_ok": true,
@@ -4547,19 +4556,16 @@
    "ticket_id": "T-0152",
    "scenario_type": "R7",
    "group": "Returns",
-   "expected_status": "escalated",
+   "expected_status": "awaiting_approval",
    "actual_status": "awaiting_approval",
    "expected_category": "returns_refunds",
    "actual_category": "returns_refunds",
    "expected_team": "Returns",
    "actual_team": "Returns",
-   "passed": false,
-   "notes": [
-    "Status awaiting_approval, expected escalated.",
-    "Stop reason: awaiting_approval."
-   ],
+   "passed": true,
+   "notes": [],
    "trace_available": true,
-   "status_ok": false,
+   "status_ok": true,
    "category_ok": true,
    "team_ok": true,
    "actions_ok": true,
@@ -4568,8 +4574,8 @@
    "unauthorized_refund_attempted": false,
    "unauthorized_refund_executed": false,
    "unsupported_reply": false,
-   "expected_pause": false,
-   "correct_pause": false,
+   "expected_pause": true,
+   "correct_pause": true,
    "expected_policy_ids": [
     "POL-RET-02"
    ],
@@ -4890,10 +4896,11 @@
    "actual_status": "escalated",
    "expected_category": "product_inquiry",
    "actual_category": "product_inquiry",
-   "expected_team": "Delivery",
+   "expected_team": "Human Review",
    "actual_team": "Delivery",
    "passed": false,
    "notes": [
+    "Team Delivery, expected Human Review.",
     "Missing actions: send_message.",
     "Cited nothing; expected one of POL-SUP-01.",
     "Stop reason: unsupported_reply."
@@ -4901,7 +4908,7 @@
    "trace_available": true,
    "status_ok": true,
    "category_ok": true,
-   "team_ok": true,
+   "team_ok": false,
    "actions_ok": false,
    "citations_ok": false,
    "refund_risk": false,

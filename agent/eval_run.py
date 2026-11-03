@@ -1,7 +1,7 @@
 """Run the agent and the baseline on a split and score every ticket against its label.
 
 Usage:  uv run python -m agent.eval_run [--split test|dev] [--systems agent,baseline] [--workers 6]
-                                        [--tickets T-0001,T-0002] [--limit N] [--redo] [--tag name]
+                                        [--tickets T-0001,T-0002] [--limit N] [--redo] [--tag name] [--rescore]
 
 Each ticket runs on its own fresh copy of the store (runtime/eval/<run>/<ticket>/), so tickets never see
 each other's refunds or messages. Results go to results/eval/ (outside runtime/, so Reset never deletes them):
@@ -102,7 +102,7 @@ def _refunds(label, events):
 
 def _known_amounts(view, events):
     """Amounts a reply may state: the records (and simple sums), the ticket text, the policies, tool results."""
-    known = set(_cents_in(view.get("orders", [])))
+    known = set(_cents_in(view.get("orders", []))) | set(_cents_in(view.get("prior_refunds_on_other_orders", [])))
     for order in view.get("orders", []):
         known |= {item["unit_cents"] * item["qty"] for item in order["items"]}
         captured = sum(p["amount_cents"] for p in order["payments"] if p["status"] == "captured")
@@ -341,6 +341,38 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
     return run
 
 
+def rescore_row(row, label, events):
+    """Score a saved row again against a (revised) label, from its trace: no model calls."""
+    ok = {e["call_id"]: e for e in events if e["event"] == "tool_result" and e.get("ok")}
+    messages, saved = [], None
+    for e in events:
+        if e["event"] == "tool_request" and e["call_id"] in ok:
+            if e["tool"] == "send_message":
+                messages.append({"message_id": ok[e["call_id"]]["result"]["receipt_id"], **_args(e)})
+            elif e["tool"] == "ticket_update":
+                saved = _args(e).get("result")
+        elif e["event"] in ("failed_safe", "failed_safe_not_saved"):  # the dispatcher's safe-failure path
+            saved = {"stop_reason": e.get("reason")}
+        elif e["event"] == "final_result":  # the baseline logs its result last
+            saved = e["result"]
+    result = {"status": row["actual_status"], "category": row["actual_category"],
+              "citations": row["actual_policy_ids"], "stop_reason": (saved or {}).get("stop_reason")}
+    return score(label, result, {"team": row["actual_team"]}, messages, events, row["seconds"], row["error"])
+
+
+def rescore(run_id, labels, results=RESULTS):
+    """Rescore a finished run against the current labels and rewrite its rows and run file."""
+    out = Path(results) / run_id
+    old = json.loads((Path(results) / f"{run_id}.json").read_text())
+    rows = [rescore_row(r, labels[r["ticket_id"]], load_jsonl(out / "traces" / f"{r['ticket_id']}.jsonl"))
+            for r in load_jsonl(out / "rows.jsonl")]
+    (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    run = build_run(run_id, old["system"], old["split"], rows, labels, model=old.get("model", CHAT_MODEL))
+    run["provenance"] += " Rescored from the saved traces against the current labels."
+    (Path(results) / f"{run_id}.json").write_text(json.dumps(run, indent=1))
+    return run
+
+
 def summary_table(runs):
     """Side-by-side headline metrics, as printed at the end of a run."""
     keys = ["success_rate", "status_accuracy", "category_accuracy", "category_macro_f1", "routing_accuracy",
@@ -367,6 +399,8 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, help="only the first N tickets of the split (a quick check)")
     parser.add_argument("--redo", action="store_true", help="discard this run's saved rows and start again")
     parser.add_argument("--tag", help="suffix for the run ID, e.g. a prompt version")
+    parser.add_argument("--rescore", action="store_true",
+                        help="score finished runs again against the current labels (no model calls)")
     args = parser.parse_args(argv)
 
     labels = {lab["ticket_id"]: lab for lab in load_jsonl(DATA / "labels.jsonl")}
@@ -375,13 +409,15 @@ def main(argv=None):
         ids = [t.strip() for t in args.tickets.split(",") if t.strip() in labels]
     if args.limit:
         ids = ids[: args.limit]
-    _default_tools()  # build the embedding cache once before threads start
+    if not args.rescore:
+        _default_tools()  # build the embedding cache once before threads start
     runs = []
     for system in [s.strip() for s in args.systems.split(",")]:
         if system not in SYSTEMS:
             parser.error(f"unknown system {system!r}")
         run_id = f"{system}-{args.split}" + (f"-{args.tag}" if args.tag else "")
-        runs.append(evaluate(system, args.split, ids, labels, args.workers, run_id, args.redo))
+        runs.append(rescore(run_id, labels) if args.rescore
+                    else evaluate(system, args.split, ids, labels, args.workers, run_id, args.redo))
     print("\n" + summary_table(runs))
     print(f"\nSaved to {RESULTS.relative_to(REPO)}/")
     return runs

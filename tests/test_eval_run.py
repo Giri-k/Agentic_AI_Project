@@ -112,6 +112,12 @@ def test_full_scripted_run_scores_the_ticket_and_writes_the_dashboard_run(tmp_pa
     assert saved["tickets"][0]["ticket_id"] == "T-0039"
     assert (tmp_path / "results" / "agent-demo" / "traces" / "T-0039.jsonl").exists()
 
+    # Rescoring from the saved trace gives the same row; a revised label changes only the judgement.
+    trace = eval_run.load_jsonl(tmp_path / "results" / "agent-demo" / "traces" / "T-0039.jsonl")
+    assert eval_run.rescore_row(row, LABELS["T-0039"], trace) == row
+    revised = eval_run.rescore_row(row, {**LABELS["T-0039"], "team": "Billing"}, trace)
+    assert not revised["passed"] and not revised["team_ok"] and revised["actual_status"] == row["actual_status"]
+
     # A rerun skips tickets already scored: no model is needed.
     again = eval_run.evaluate("agent", "demo", ["T-0039"], LABELS, workers=1, run_id="agent-demo",
                               tools=lambda: (ScriptedLLM(), retriever), results=tmp_path / "results",
