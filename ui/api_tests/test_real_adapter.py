@@ -175,3 +175,24 @@ def test_a_console_error_saves_failed_safe_and_frees_the_worker(tmp_path):
         assert any(e["event"] == "stop" and "RuntimeError" in e["reason"] for e in trace)
         assert trace[-1]["event"] == "run_finished"
         assert client.get("/api/health").json()["running"] is False
+
+
+def test_evaluation_page_shows_measured_results_once_they_exist(tmp_path):
+    results = tmp_path / "results"
+    adapter = RealAdapter(runtime=tmp_path / "rt", llm_factory=lambda: None, retriever_factory=lambda: retriever,
+                          results=results)
+    with TestClient(create_app(adapter=adapter)) as client:
+        assert all(r["mock"] for r in client.get("/api/eval/runs").json())  # nothing measured yet
+        assert client.get("/api/eval/retrieval").json()["mock"] is True
+        results.mkdir()
+        run = {"run_id": "agent-test", "system": "agent", "split": "test", "created_at": "2026-11-02T00:00:00Z",
+               "mock": False, "measured": True, "provenance": "Measured", "benchmark_id": "test-1", "policy_snapshot": "p-1",
+               "metrics": {}, "by_group": [],
+               "by_end_state": [], "tickets": []}
+        (results / "agent-test.json").write_text(json.dumps(run))
+        (results / "retrieval.json").write_text(json.dumps({"mock": False, "measured": True, "methods": []}))
+        runs = client.get("/api/eval/runs").json()
+        assert [r["run_id"] for r in runs] == ["agent-test"] and runs[0]["mock"] is False
+        assert client.get("/api/eval/runs/agent-test").json()["measured"] is True
+        assert client.get("/api/eval/runs/mock-agent-test-v1").status_code == 404
+        assert client.get("/api/eval/retrieval").json()["mock"] is False

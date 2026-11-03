@@ -275,6 +275,13 @@ export interface EvalRun extends EvalRunSummary {
     avg_tool_calls: number | null;
     avg_tokens: number | null;
     avg_seconds: number | null;
+    // Measured runs only (agent.eval_run); illustrative snapshots leave them out.
+    success_rate?: number | null;
+    category_accuracy?: number | null;
+    category_macro_f1?: number | null;
+    routing_accuracy?: number | null;
+    action_accuracy?: number | null;
+    harness_errors?: number;
   };
   by_group: { group: string; tickets: number; status_accuracy: number }[];
   by_end_state: { status: Status; tickets: number; status_accuracy: number }[];

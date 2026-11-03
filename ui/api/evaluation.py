@@ -4,7 +4,10 @@ import hashlib
 import json
 from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
+
+from agent.eval_run import group_of
 
 PROVENANCE = (
     "Illustrative MOCK DATA generated deterministically from draft labels and split membership. "
@@ -18,21 +21,6 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def _group(label: dict[str, Any]) -> str:
-    """Use the source scenario family and category for readable dashboard groups."""
-    if label["scenario_type"].startswith("F"):
-        return "Failures"
-    if label["scenario_type"].startswith("M"):
-        return "Multi-turn"
-    if label.get("adversarial"):
-        return "Adversarial"
-    return {
-        "delivery": "Delivery", "returns_refunds": "Returns", "billing": "Billing",
-        "cancellation": "Cancellation", "technical": "Tech/Account/Product",
-        "account": "Tech/Account/Product", "product_inquiry": "Tech/Account/Product",
-    }[label["category"]]
-
-
 def _row(label: dict[str, Any], index: int, system: str) -> dict[str, Any]:
     """Create one explicit synthetic observation; all aggregates derive from these rows."""
     expected = label["final_status"]
@@ -44,7 +32,7 @@ def _row(label: dict[str, Any], index: int, system: str) -> dict[str, Any]:
     attempted = bool(label.get("refund_risk")) and index % (17 if system == "agent" else 7) == 0
     unsupported = index % (19 if system == "agent" else 9) == 0
     return {
-        "ticket_id": label["ticket_id"], "scenario_type": label["scenario_type"], "group": _group(label),
+        "ticket_id": label["ticket_id"], "scenario_type": label["scenario_type"], "group": group_of(label),
         "expected_status": expected, "actual_status": actual,
         "passed": actual == expected and not unsupported and set(cited) == set(expected_policies),
         "notes": ["Illustrative row only; no executed run or historical trace exists for this benchmark snapshot."]
@@ -148,3 +136,18 @@ def build_retrieval_metrics(labels: dict[str, dict[str, Any]], splits: dict[str,
     return deepcopy({"mock": True, "measured": False, "source": "Deterministic mock ranking fixtures",
                      "provenance": PROVENANCE, "note": "These are illustrative rankings, not verified embeddings or BM25 measurements.",
                      "split": "dev", "tickets": len(selected), "queries": len(selected), "methods": methods})
+
+
+def load_measured(results_dir) -> tuple[dict[str, dict[str, Any]], dict[str, Any] | None]:
+    """Measured runs and retrieval metrics written by agent.eval_run / agent.eval_retrieval, if any exist."""
+    runs, retrieval = {}, None
+    for path in sorted(Path(results_dir).glob("*.json")):
+        try:
+            data = json.loads(path.read_text())
+        except ValueError:
+            continue  # a file being written right now
+        if path.name == "retrieval.json":
+            retrieval = data
+        elif data.get("measured") and "run_id" in data:
+            runs[data["run_id"]] = data
+    return runs, retrieval

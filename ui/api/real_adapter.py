@@ -17,6 +17,7 @@ from agent import baseline
 from agent.config import (CHAT_MODEL, MAX_MODEL_CALLS, MAX_RETRIES, MAX_REVISIONS, MAX_SCHEMA_REPAIRS,
                           MAX_TOOL_CALLS, RUNTIME)
 from agent.dispatcher import Dispatcher
+from agent.eval_run import RESULTS
 from agent.schemas import Category
 from agent.staff import approve as staff_approve
 from agent.staff import staged_approvals
@@ -25,7 +26,7 @@ from agent.tools import _order_view
 from agent.trace import Trace
 
 from .adapter import AdapterError
-from .evaluation import build_eval_runs, build_retrieval_metrics, eval_summaries
+from .evaluation import build_eval_runs, build_retrieval_metrics, eval_summaries, load_measured
 from .grading import expected_outcome
 from .mock_adapter import _policy_from_file
 
@@ -57,7 +58,8 @@ class RealAdapter:
 
     name = "real"
 
-    def __init__(self, runtime: str | Path = RUNTIME, llm_factory=_default_llm, retriever_factory=_default_retriever):
+    def __init__(self, runtime: str | Path = RUNTIME, llm_factory=_default_llm, retriever_factory=_default_retriever,
+                 results: str | Path = RESULTS):
         """Open (or create) the working store; nothing calls the model until a run starts."""
         self.root = Path(runtime)
         if not (self.root / "store.json").exists():
@@ -74,8 +76,9 @@ class RealAdapter:
         policy_dir = data_dir.parents[1] / "policies"
         self._policies = {pid: _policy_from_file(policy_dir / f"{pid}.md", pid) for pid in sorted(self._store.policy_ids)}
         as_of = self._fresh().as_of
-        self._eval_runs = build_eval_runs(self._labels, self._splits, self._policies, as_of)  # mock until eval runs
-        self._retrieval_metrics = build_retrieval_metrics(self._labels, self._splits, self._policies)
+        self._results = Path(results)
+        self._mock_runs = build_eval_runs(self._labels, self._splits, self._policies, as_of)
+        self._mock_retrieval = build_retrieval_metrics(self._labels, self._splits, self._policies)
 
     # --- reading ---
 
@@ -309,19 +312,26 @@ class RealAdapter:
             raise AdapterError(404, f"Policy {policy_id!r} was not found.")
         return dict(self._policies[policy_id])
 
+    def _evaluation(self) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+        """Measured results from results/eval/ (read on each request, so a finished run shows without a restart).
+        The labelled mock snapshots appear only when nothing has been measured yet."""
+        runs, retrieval = load_measured(self._results)
+        return runs or self._mock_runs, retrieval or self._mock_retrieval
+
     def list_eval_runs(self) -> list[dict[str, Any]]:
-        """Illustrative (mock-labelled) snapshots until the evaluation runner writes measured ones."""
-        return eval_summaries(self._eval_runs)
+        """Evaluation runs: measured ones once agent.eval_run has written them."""
+        return eval_summaries(self._evaluation()[0])
 
     def get_eval_run(self, run_id: str) -> dict[str, Any]:
-        """One evaluation snapshot."""
-        if run_id not in self._eval_runs:
+        """One evaluation run with its per-ticket rows."""
+        runs = self._evaluation()[0]
+        if run_id not in runs:
             raise AdapterError(404, "Evaluation snapshot was not found.")
-        return self._eval_runs[run_id]
+        return runs[run_id]
 
     def retrieval_metrics(self) -> dict[str, Any]:
-        """Illustrative (mock-labelled) retrieval table until measured results are wired in."""
-        return self._retrieval_metrics
+        """Retrieval metrics: measured once agent.eval_retrieval --save has written them."""
+        return self._evaluation()[1]
 
     def reset(self) -> dict[str, int]:
         """Fresh working store: clears runs, traces, checkpoints and the outbox (the embedding cache is kept)."""

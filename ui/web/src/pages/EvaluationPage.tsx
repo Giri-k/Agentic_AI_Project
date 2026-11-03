@@ -103,8 +103,28 @@ function ComparisonTable({
   const baseline = selected.system === "baseline" ? selected : counterpart;
   const rows = [
     {
+      label: "Overall success",
+      value: (run: EvalRun) => percentage(run.metrics.success_rate),
+    },
+    {
       label: "Final-status accuracy",
       value: (run: EvalRun) => percentage(run.metrics.status_accuracy),
+    },
+    {
+      label: "Category accuracy",
+      value: (run: EvalRun) => percentage(run.metrics.category_accuracy),
+    },
+    {
+      label: "Category macro-F1",
+      value: (run: EvalRun) => numeric(run.metrics.category_macro_f1, 3),
+    },
+    {
+      label: "Routing accuracy",
+      value: (run: EvalRun) => percentage(run.metrics.routing_accuracy),
+    },
+    {
+      label: "Expected actions and arguments",
+      value: (run: EvalRun) => percentage(run.metrics.action_accuracy),
     },
     {
       label: "Unauthorized refunds attempted",
