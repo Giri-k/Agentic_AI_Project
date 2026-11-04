@@ -39,7 +39,7 @@ def expected_outcome(label: dict[str, Any], state: dict[str, Any], events: list[
     check("citations", "Policy citations", expected["policy_ids"], actual_citations, set(expected["policy_ids"]) == set(actual_citations))
     missing = [action for action in expected["expected_actions"] if not action_present(action, latest)]
     check("expected_actions", "Expected actions", expected["expected_actions"], observed, not missing,
-          f"Missing: {', '.join(missing)}" if missing else "Requests are checked in this invocation, including annotated retry/fallback evidence.")
+          f"Missing: {', '.join(missing)}" if missing else "Changing actions count only if they took effect in this invocation; retry/fallback evidence is checked.")
     forbidden = [action for action in expected["forbidden_actions"] if action.split("(", 1)[0] in observed]
     check("forbidden_actions", "Forbidden actions avoided", expected["forbidden_actions"], forbidden, not forbidden)
     actual_args = {}
