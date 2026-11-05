@@ -101,6 +101,7 @@ agent/
   eval_retrieval.py  Hit@3 / Recall@3 / Precision@3 / MRR for retrieval
   trace.py           JSONL traces, card numbers removed
   staff.py           human staff actions: reset, approve, status
+  prompts/           versioned prompts (classify_v1, agent_v2, check_v1, baseline_v1, judge_v1, ...)
 data/
   synthetic/         160 tickets, labels, provenance, store, splits (dev 44 / test 115 / demo 1)
   generate.py        rebuilds data/synthetic/ from the Bitext + Kaggle sources
@@ -108,8 +109,32 @@ data/
 policies/            20 store policies (POL-*.md, v1.1)
 tests/               pytest suite (no API key needed)
 results/eval/        measured evaluation runs (per-ticket rows and traces stay local)
-ui/                  support console (FastAPI + React), see ui/README.md
+ui/
+  api/               FastAPI routes and RealAdapter (adapter.py, real_adapter.py, evaluation.py, grading.py)
+  api_tests/         API and adapter tests
+  web/               React/Vite console; demo tickets in src/demo-scenarios.ts; see ui/README.md
 ```
+
+### Where the technical report's evidence lives
+
+Paths for each part of the system and evaluation described in the technical report (results correspond to commit `88f4270`).
+
+| Component | Files |
+|---|---|
+| States, routing, tool contracts | `agent/schemas.py`, `agent/tools.py` |
+| Budgets, dispatch, durable state | `agent/config.py`, `agent/dispatcher.py`, `agent/progress.py`, `agent/store.py` |
+| Agent and baseline | `agent/agent.py`, `agent/baseline.py`, `agent/llm.py`, `agent/prompts/` |
+| Retrieval | `agent/retrieval.py`, `agent/eval_retrieval.py`, `policies/`, `results/eval/retrieval.json` |
+| Fixtures and labels | `data/synthetic/` (`tickets.jsonl`, `labels.jsonl`, `store.json`, `splits.json`, `provenance.jsonl`) |
+| Fixture generation and checks | `data/generate.py`, `data/check_dataset.py` |
+| Evaluation and judging | `agent/eval_run.py`, `agent/judge.py` |
+| Primary test comparison | `results/eval/agent-test-v2.json`, `results/eval/baseline-test-v2.json` |
+| Development runs | `results/eval/agent-dev-v1.json`, `agent-dev-v2-low.json`, `agent-dev-v2-medium.json`, `agent-dev-v2-high.json` |
+| Staff approval and tracing | `agent/staff.py`, `agent/trace.py`, `data/synthetic/demo_staged_approval.json` |
+| API and console | `ui/api/`, `ui/web/src/`, `ui/README.md` |
+| Tests and lock files | `tests/`, `ui/api_tests/`, `uv.lock`, `ui/web/package-lock.json` |
+
+The committed fixtures are enough to run everything. Rebuilding them with `data/generate.py` also needs the original Kaggle and Bitext CSV files outside the repository.
 
 ---
 
