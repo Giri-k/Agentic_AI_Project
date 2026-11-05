@@ -5,7 +5,7 @@ import pytest
 
 from agent import eval_run
 from agent.agent import Classification, Finish, ReplyCheck, Step
-from agent.schemas import Category
+from agent.schemas import Category, Status
 from agent.store import load_jsonl
 from agent.config import DATA
 
@@ -301,3 +301,94 @@ def test_rescore_does_not_invent_missing_historical_model_or_policy_metadata(tmp
     rescored = eval_run.rescore("agent-demo", LABELS, results=tmp_path / "results")
     assert rescored["model"] is None and rescored["policy_snapshot"] is None
     assert rescored["settings"] == {}
+
+
+# --- required actions must take effect, not just be requested ----------------------------------------
+
+def _resume_label():
+    return eval_run.resume_label(LABELS["T-0039"])  # expects process_refund with the APR-8013 arguments
+
+
+def _first_read(actions=()):
+    return [ev("tool_request", call_id="g", tool="ticket_get", args="{}"),
+            ev("tool_result", call_id="g", tool="ticket_get", ok=True, result={"actions": list(actions)})]
+
+
+def test_a_requested_refund_that_was_refused_is_a_missing_action():
+    events = _first_read() + refund_events(ok=False, code="NO_MATCHING_APPROVAL")
+    assert not eval_run.action_present("process_refund", events)
+    row = eval_run.score(_resume_label(), {"status": "resolved", "category": "returns_refunds"},
+                         {"team": "Returns", "actions": []}, [], events, 1.0)
+    assert not row["actions_ok"]
+    assert "Requested but did not take effect: process_refund." in row["notes"]
+
+
+def test_a_refund_that_committed_before_a_timeout_still_counts_from_its_receipt():
+    events = _first_read() + refund_events(ok=False, code="TIMEOUT")
+    state = {"team": "Returns", "actions": [{"type": "process_refund", "receipt_id": "RF-4019"}]}
+    assert "process_refund" in eval_run.committed_tools(events, state)
+    assert eval_run.action_present("process_refund", events, eval_run.committed_tools(events, state))
+
+
+def test_receipts_from_before_the_run_and_pythons_own_failed_safe_save_do_not_count():
+    events = _first_read(actions=[{"type": "process_refund", "receipt_id": "RF-4017"}])
+    state = {"actions": [{"type": "process_refund", "receipt_id": "RF-4017"},
+                         {"type": "ticket_update", "receipt_id": "AUD-5001"}]}
+    assert eval_run.committed_tools(events, state) == {"ticket_get"}
+
+
+# --- approval-and-resume is evaluated as its own phase ----------------------------------------------
+
+def _baseline_tools(*outputs):
+    from test_baseline import FakeLLM
+    llm = FakeLLM(*outputs)
+    return llm, (lambda: (llm, retriever))
+
+
+def _baseline_pause():
+    from test_baseline import output
+    # No pause message: with one, the first run uses 4 tool calls and the resume needs 5, which exceeds the
+    # lifetime limit of 8 (MAX_TOOL_CALLS) and ends the resume as baseline_tool_budget.
+    return output(status=Status.AWAITING_APPROVAL, response=None, citations=["POL-RET-02"],
+                  unresolved_requirements=["staff approval for 114900 cents"], stop_reason="needs_staff_approval")
+
+
+def _baseline_refund():
+    from test_baseline import action, output
+    body = "Your refund of $1,149.00 has been issued."
+    return output(status=Status.RESOLVED, response=body, citations=["POL-RET-02"],
+                  intended_actions=[action("process_refund", order_id="O-60048", cents=114900, approval_id="APR-8013"),
+                                    action("send_message", ticket_id="T-0039", body=body, citations=["POL-RET-02"])])
+
+
+def test_resume_phase_runs_after_staff_approval_and_is_scored_separately(tmp_path):
+    llm, tools = _baseline_tools(_baseline_pause(), _baseline_refund())
+    run = eval_run.evaluate("baseline", "demo", ["T-0039"], LABELS, workers=1, run_id="b-resume", tools=tools,
+                            results=tmp_path / "results", runtime=tmp_path / "runtime")
+    row = run["tickets"][0]
+    assert row["actual_status"] == "awaiting_approval" and row["correct_pause"]       # first invocation
+    assert row["resume_ran"] and row["resume_status"] == "resolved" and row["resume_passed"], row["resume_notes"]
+    assert not row["resume_unauthorized_refund_executed"] and llm.calls == 2
+    assert (tmp_path / "results" / "b-resume" / "traces" / "T-0039.resume.jsonl").exists()
+    assert run["metrics"]["resume_expected"] == 1 and run["metrics"]["resume_passed"] == 1
+    rescored = eval_run.rescore("b-resume", LABELS, results=tmp_path / "results")
+    assert rescored["tickets"][0]["resume_passed"] and rescored["metrics"]["resume_passed"] == 1
+
+
+def test_no_resume_when_the_first_run_did_not_pause_for_approval(tmp_path):
+    from test_baseline import output
+    escalate = output(status=Status.ESCALATED, unresolved_requirements=["staff review"], stop_reason="unsupported_request")
+    llm, tools = _baseline_tools(escalate)
+    run = eval_run.evaluate("baseline", "demo", ["T-0039"], LABELS, workers=1, run_id="b-noresume", tools=tools,
+                            results=tmp_path / "results", runtime=tmp_path / "runtime")
+    row = run["tickets"][0]
+    assert row["resume_expected"] and not row["resume_ran"] and not row["resume_passed"]
+    assert llm.calls == 1 and run["metrics"]["resume_passed"] == 0
+
+
+def test_summary_table_names_structural_and_judge_unsupported_replies_separately():
+    runs = [{"run_id": "agent-test-v2", "metrics": {"success_rate": 0.635, "unsupported_replies": 0,
+                                                     "judge_unsupported_replies": 15}}]
+    table = eval_run.summary_table(runs)
+    assert "unsupported_replies_structural" in table and "unsupported_replies_judge" in table
+    assert "success_rate_structural" in table

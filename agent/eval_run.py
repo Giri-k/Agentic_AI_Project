@@ -11,7 +11,12 @@ each other's refunds or messages. Results go to results/eval/ (outside runtime/,
   <run>/manifest.json immutable model/settings, source and policy snapshot for safe cache reuse
   <run>.json           the run in the shape the console's Evaluation page reads (the only file committed)
 
-Scoring uses only the saved result, the store and the trace, the same for both systems. The label's
+Scoring uses only the saved result, the store and the trace, the same for both systems. A required changing
+action (send_message, process_refund, cancel_order, ticket_update) counts only if it took effect: an ok result or a
+new receipt in the store, not just a request. Tickets whose label has `after_resume` get a second, separately
+scored phase: staff add the staged approval, the system resumes, and the resume is scored against those
+expectations (saved as <run>/traces/<ticket>.resume.jsonl; reported as resume_* metrics, never folded into
+"passed"). The label's
 response_facts are not scored here: whether a reply says the right things still needs human review.
 """
 
@@ -30,11 +35,17 @@ from . import agent as agent_loop
 from . import baseline
 from .agent import CANCEL_CLAIM, REFUND_CLAIM, _amounts_in, _cents_in
 from .config import CHAT_MODEL, DATA, EMBED_MODEL, POLICY_DIR, REASONING_EFFORT, REPO, RUNTIME
+from .staff import approve
 from .store import Store, atomic_write, load_jsonl
 from .tools import CARD_NUMBER
 
 RESULTS = REPO / "results" / "eval"
 SYSTEMS = {"agent": agent_loop.run_ticket, "baseline": baseline.run_ticket}
+RESUMES = {"agent": agent_loop.resume, "baseline": baseline.resume}
+CHANGING_TOOLS = {"send_message", "process_refund", "cancel_order", "ticket_update"}
+# A receipt in the store proves its action happened even when the tool's reply was lost (timeout after commit).
+# AUD- receipts are left out: Python's own failed_safe save writes one without the system requesting ticket_update.
+RECEIPT_TOOL = {"RF-": "process_refund", "CAN-": "cancel_order", "MSG-": "send_message"}
 PAUSES = {"awaiting_customer", "awaiting_approval"}
 REFUND_GATE_CODES = {"NO_MATCHING_APPROVAL", "APPROVAL_ALREADY_USED", "EXCEEDS_REMAINING_BALANCE", "NOT_ELIGIBLE",
                      "APPROVAL_CONFLICT", "ORDER_NOT_FOUND", "WRONG_TICKET"}
@@ -54,18 +65,39 @@ def group_of(label):
     return GROUPS[label["category"]]
 
 
-def action_present(action, events):
-    """Did the trace show a labelled action? "(retry)", "(reread)" and "(bm25)" need that specific evidence."""
+def committed_tools(events, state=None, result=None):
+    """Changing tools that took effect in this run: an ok tool result, or a receipt saved for this ticket that the
+    run's first ticket_get had not seen yet (so a timeout after the change committed still counts)."""
+    done = {e.get("tool") for e in events if e["event"] == "tool_result" and e.get("ok") is True}
+    first = next((e.get("result") for e in events if e["event"] == "tool_result" and e.get("tool") == "ticket_get"
+                  and e.get("ok") is True), None)
+    if first is None:  # without the starting state we cannot tell old receipts from new ones
+        return done
+    seen = {a.get("receipt_id") for a in first.get("actions", [])}
+    receipts = [a.get("receipt_id") for a in (state or {}).get("actions", [])]
+    receipts += list((result or {}).get("receipt_ids") or [])
+    for receipt in receipts:
+        if receipt not in seen:
+            done |= {tool for prefix, tool in RECEIPT_TOOL.items() if str(receipt).startswith(prefix)}
+    return done
+
+
+def action_present(action, events, committed=None):
+    """Did the trace show a labelled action? Changing tools must have taken effect (see committed_tools), not
+    just been requested. "(retry)", "(reread)" and "(bm25)" need that specific evidence."""
     tool = action.split("(", 1)[0]
     requests = [e for e in events if e["event"] == "tool_request" and e.get("tool") == tool]
     outcomes = [e for e in events if e["event"] == "tool_result" and e.get("tool") == tool]
+    if committed is None:
+        committed = committed_tools(events)
+    took_effect = tool not in CHANGING_TOOLS or tool in committed
     if "(retry)" in action:
-        return any(e.get("retry") for e in outcomes)
+        return any(e.get("retry") for e in outcomes) and took_effect
     if "(reread)" in action:
         return len(requests) >= 2
     if "(bm25)" in action:
         return any(e.get("ok") and e.get("result", {}).get("method") == "bm25" for e in outcomes)
-    return bool(requests)
+    return bool(requests) and took_effect
 
 
 # --- scoring one ticket ----------------------------------------------------------
@@ -169,8 +201,11 @@ def score(label, result, state, messages, events, seconds, error=None):
     result = result or {}
     status, category, team = result.get("status"), result.get("category"), state.get("team")
     expected, cited = label["policy_ids"], result.get("citations", [])
-    missing = [a for a in label["expected_actions"] if not action_present(a, events)]
+    committed = committed_tools(events, state, result)
+    missing = [a for a in label["expected_actions"] if not action_present(a, events, committed)]
     requested = {e["tool"] for e in events if e["event"] == "tool_request"}
+    no_effect = [a for a in missing if a.split("(", 1)[0] in CHANGING_TOOLS and a.split("(", 1)[0] in requested]
+    never = [a for a in missing if a not in no_effect]
     forbidden = [a for a in label["forbidden_actions"] if a.split("(", 1)[0] in requested]
     bad_args = [tool for tool, wanted in label.get("expected_tool_args", {}).items()
                 if not any(_matches(_args(e), wanted) for e in events
@@ -186,7 +221,8 @@ def score(label, result, state, messages, events, seconds, error=None):
         [f"Status {status}, expected {label['final_status']}."] if not checks["status_ok"] else []) + (
         [f"Category {category}, expected {label['category']}."] if not checks["category_ok"] else []) + (
         [f"Team {team}, expected {label['team']}."] if not checks["team_ok"] else []) + (
-        [f"Missing actions: {', '.join(missing)}."] if missing else []) + (
+        [f"Missing actions: {', '.join(never)}."] if never else []) + (
+        [f"Requested but did not take effect: {', '.join(no_effect)}."] if no_effect else []) + (
         [f"Forbidden actions requested: {', '.join(forbidden)}."] if forbidden else []) + (
         [f"Wrong or missing arguments for: {', '.join(bad_args)}."] if bad_args else []) + (
         [f"Cited {', '.join(cited) or 'nothing'}; expected one of {', '.join(expected)}."]
@@ -286,7 +322,20 @@ def metrics(rows):
                                  else None),
         "p95_model_latency_ms": percentile(lat, 95),
         "harness_errors": sum(r["error"] is not None for r in rows),
+        **resume_metrics(rows),
     }
+
+
+def resume_metrics(rows):
+    """Approval-and-resume phase, separate from the first invocation's numbers. Empty if no ticket needs it."""
+    due = [r for r in rows if r.get("resume_expected")]
+    if not due:
+        return {}
+    return {"resume_expected": len(due), "resume_ran": sum(bool(r.get("resume_ran")) for r in due),
+            "resume_passed": sum(bool(r.get("resume_passed")) for r in due),
+            "resume_success_rate": sum(bool(r.get("resume_passed")) for r in due) / len(due),
+            "resume_unauthorized_refunds_executed": sum(bool(r.get("resume_unauthorized_refund_executed")) for r in due),
+            "resume_unsupported_replies": sum(bool(r.get("resume_unsupported_reply")) for r in due)}
 
 
 def _digest(value):
@@ -481,7 +530,55 @@ def _attempt(system, ticket_id, label, work, out, tools):
     if trace.exists():
         shutil.copy(trace, saved_trace)
     messages = [m for m in store.data["outbox"] if m["ticket_id"] == ticket_id]
-    return score(label, result, state, messages, events, seconds, error), events
+    row = score(label, result, state, messages, events, seconds, error)
+    if label.get("after_resume"):
+        row.update(_resume_phase(system, ticket_id, label, work, out, tools, len(events), messages))
+    return row, events
+
+
+def resume_label(label):
+    """The label for the phase after staff approve: its own end state, actions and arguments."""
+    plan = label["after_resume"]
+    now_expected = {a.split("(", 1)[0] for a in plan["expected_actions"]}
+    return {**label, "final_status": plan["final_status"], "expected_actions": plan["expected_actions"],
+            "expected_tool_args": plan.get("expected_tool_args", {}),
+            "forbidden_actions": [a for a in label["forbidden_actions"] if a.split("(", 1)[0] not in now_expected]}
+
+
+def _resume_fields(scored, events):
+    """The resume phase's row fields, prefixed so they never mix with the first invocation's."""
+    keep = ("actual_status", "actual_category", "actual_team", "actual_policy_ids", "passed", "notes", "status_ok",
+            "actions_ok", "unauthorized_refund_attempted", "unauthorized_refund_executed", "unsupported_reply",
+            "model_calls", "tool_calls", "seconds", "error")
+    out = {f"resume_{k.removeprefix('actual_')}": scored[k] for k in keep}
+    return {"resume_expected": True, "resume_ran": True, "resume_trace_fingerprint": _digest(events), **out}
+
+
+def _resume_phase(system, ticket_id, label, work, out, tools, first_events, first_messages):
+    """Staff add the staged approval and the system resumes, but only if the first run paused for approval."""
+    saved = out / "traces" / f"{ticket_id}.resume.jsonl"
+    saved.unlink(missing_ok=True)
+    store = Store(work)
+    if store.ticket_state(ticket_id)["status"] != "awaiting_approval":
+        return {"resume_expected": True, "resume_ran": False, "resume_passed": False,
+                "resume_notes": ["The first run did not pause for approval, so there was nothing to resume."]}
+    start, error, result = time.monotonic(), None, None
+    try:
+        approve(store, label["after_resume"]["staged_approval_id"])
+        llm, retriever = tools()
+        result = RESUMES[system](store, ticket_id, retriever, llm).model_dump(mode="json")
+    except Exception as e:  # recorded on the row; the evaluation goes on
+        error = f"{type(e).__name__}: {e}"[:300]
+    seconds = time.monotonic() - start
+    store = Store(work)
+    state = store.ticket_state(ticket_id)
+    result = result or state.get("last_result")
+    trace = work / "traces" / f"{ticket_id}.jsonl"
+    events = (load_jsonl(trace) if trace.exists() else [])[first_events:]
+    atomic_write(saved, "".join(json.dumps(e) + "\n" for e in events))
+    before = {m["message_id"] for m in first_messages}
+    messages = [m for m in store.data["outbox"] if m["ticket_id"] == ticket_id and m["message_id"] not in before]
+    return _resume_fields(score(resume_label(label), result, state, messages, events, seconds, error), events)
 
 
 def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=False, tools=None,
@@ -560,8 +657,8 @@ def evaluate(system, split, ticket_ids, labels, workers=6, run_id=None, redo=Fal
     return run
 
 
-def rescore_row(row, label, events):
-    """Score a saved row again against a (revised) label, from its trace: no model calls."""
+def _replayed(events):
+    """Messages that were sent and the result that was saved, read back from a trace."""
     ok = {e["call_id"]: e for e in events if e["event"] == "tool_result" and e.get("ok")}
     messages, saved = [], None
     for e in events:
@@ -574,10 +671,39 @@ def rescore_row(row, label, events):
             saved = {"stop_reason": e.get("reason")}
         elif e["event"] == "final_result":  # the baseline logs its result last
             saved = e["result"]
+    return messages, saved or {}
+
+
+def rescore_row(row, label, events, resume_events=None):
+    """Score a saved row again against a (revised) label, from its trace(s): no model calls."""
+    messages, saved = _replayed(events)
     result = {"status": row["actual_status"], "category": row["actual_category"],
-              "citations": row["actual_policy_ids"], "stop_reason": (saved or {}).get("stop_reason")}
+              "citations": row["actual_policy_ids"], "stop_reason": saved.get("stop_reason"),
+              "receipt_ids": saved.get("receipt_ids")}
     rescored = score(label, result, {"team": row["actual_team"]}, messages, events, row["seconds"], row["error"])
+    if label.get("after_resume") and row.get("resume_ran") and resume_events is not None:
+        messages, saved = _replayed(resume_events)
+        result = {"status": row["resume_status"], "category": row["resume_category"],
+                  "citations": row["resume_policy_ids"], "stop_reason": saved.get("stop_reason"),
+                  "receipt_ids": saved.get("receipt_ids")}
+        again = score(resume_label(label), result, {"team": row["resume_team"]}, messages, resume_events,
+                      row["resume_seconds"], row["resume_error"])
+        rescored.update(_resume_fields(again, resume_events))
+    elif label.get("after_resume"):
+        rescored.update({k: v for k, v in row.items() if k.startswith("resume_")} or
+                        {"resume_expected": True, "resume_ran": False, "resume_passed": False})
     return {**rescored, **({"attempts": row["attempts"]} if "attempts" in row else {})}
+
+
+def saved_resume_events(out, row):
+    """The resume phase's saved trace, refusing a missing or replaced one."""
+    if not row.get("resume_ran"):
+        return None
+    path = Path(out) / "traces" / f"{row['ticket_id']}.resume.jsonl"
+    events = load_jsonl(path) if path.exists() else []
+    if row.get("resume_trace_fingerprint") != _digest(events):
+        raise ValueError(f"Resume trace for {row['ticket_id']} is missing or changed; restore it or rerun.")
+    return events
 
 
 def rescore(run_id, labels, results=RESULTS):
@@ -590,7 +716,7 @@ def rescore(run_id, labels, results=RESULTS):
     execution = json.loads(manifest.read_text()) if manifest.exists() else None
     if execution and old.get("execution_fingerprint") != execution["fingerprint"]:
         raise ValueError("The execution changed or has not finished; complete the evaluation before rescoring it.")
-    rows = [rescore_row(r, labels[r["ticket_id"]], saved_events(out, r))
+    rows = [rescore_row(r, labels[r["ticket_id"]], saved_events(out, r), saved_resume_events(out, r))
             for r in load_jsonl(out / "rows.jsonl")]
     atomic_write(out / "rows.jsonl", "".join(json.dumps(r) + "\n" for r in rows))
     run = build_run(run_id, old["system"], old["split"], rows, labels, model=old.get("model"),
@@ -600,16 +726,23 @@ def rescore(run_id, labels, results=RESULTS):
     return run
 
 
+# Names that say what was measured: the rule-based check is not the semantic judge, and neither proves zero.
+DISPLAY = {"unsupported_replies": "unsupported_replies_structural",
+           "judge_unsupported_replies": "unsupported_replies_judge",
+           "success_rate": "success_rate_structural"}
+
+
 def summary_table(runs):
     """Side-by-side headline metrics, as printed at the end of a run."""
     keys = ["success_rate", "status_accuracy", "category_accuracy", "category_macro_f1", "routing_accuracy",
             "action_accuracy", "tool_call_precision", "tool_call_recall", "tool_argument_accuracy",
             "tool_error_rate", "citation_precision", "citation_recall", "unauthorized_refunds_attempted",
-            "unauthorized_refunds_executed", "unsupported_replies", "correct_pauses", "expected_pauses",
+            "unauthorized_refunds_executed", "unsupported_replies", "judge_unsupported_replies",
+            "correct_pauses", "expected_pauses", "resume_passed", "resume_expected",
             "avg_model_calls", "avg_tool_calls", "avg_tokens_in", "avg_tokens_out", "avg_seconds", "p95_seconds",
             "avg_model_latency_ms", "p95_model_latency_ms", "harness_errors"]
-    keys += [k for k in ("judge_fact_coverage", "judge_contradicted_replies", "judge_unsupported_replies")
-             if any(k in r["metrics"] for r in runs)]
+    keys += [k for k in ("judge_fact_coverage", "judge_contradicted_replies") if any(k in r["metrics"] for r in runs)]
+    keys = [k for k in keys if not k.startswith(("judge_", "resume_")) or any(k in r["metrics"] for r in runs)]
     width = max([12, *(len(r["run_id"]) + 2 for r in runs)])
     lines = [f"{'metric':<32}" + "".join(f"{r['run_id']:>{width}}" for r in runs)]
     for key in keys:
@@ -617,7 +750,7 @@ def summary_table(runs):
         for r in runs:
             v = r["metrics"].get(key)
             cells.append("—" if v is None else f"{v:.3f}" if isinstance(v, float) else str(v))
-        lines.append(f"{key:<32}" + "".join(f"{c:>{width}}" for c in cells))
+        lines.append(f"{DISPLAY.get(key, key):<32}" + "".join(f"{c:>{width}}" for c in cells))
     return "\n".join(lines)
 
 
