@@ -175,16 +175,75 @@ def test_resume_requires_the_paused_orders_exact_approval_amount(demo):
     assert demo.get("/api/tickets/T-0039").json()["execution"]["budget"] == detail["execution"]["budget"]
 
 
-def test_resume_does_not_guess_an_unknown_refund_amount(demo):
+@pytest.mark.parametrize("requirement", [
+    "approval_needed for 114900 cents on order O-60048",
+    "approval for 114900 cents for order O-60048 is missing",
+    "staff approval for 114900 cents",
+    "staff approval for order O-60048, amount 114900 cents",
+    "approval required for $1,149.00 on order O-60048",
+    "refund of $1149 awaiting staff approval for O-60048",
+    "staff approval for USD 1149.00",
+    "approval needed: 114,900 cents ($1,149.00)",
+    "Staff approval needed for $1,149.00.",
+    "Approval for $1149.00, order O-60048",
+    "staff_approval_for_114900_cents",
+    "staff_approval_for_114900_cents_on_order_O-60048",
+])
+def test_resume_accepts_explicit_approval_requirement_wording(demo, requirement):
     demo.post("/api/tickets/T-0039/run", json={"system": "agent"})
     wait_idle(demo)
     store = Store(demo.app.state.adapter.root)
-    store.ticket_state("T-0039")["last_result"]["unresolved_requirements"] = ["staff approval required"]
+    store.ticket_state("T-0039")["last_result"]["unresolved_requirements"] = [requirement]
+    store.save()
+    assert demo.get("/api/tickets/T-0039").json()["execution"]["can_resume"] is False
+    demo.post("/api/approvals/APR-8013/approve")
+    detail = demo.get("/api/tickets/T-0039").json()
+    assert detail["execution"]["pending_refund"]["amount_cents"] == 114900
+    assert detail["execution"]["can_resume"] is True
+    assert demo.post("/api/tickets/T-0039/resume").status_code == 202
+    done = wait_idle(demo, "T-0039")
+    assert done["state"]["status"] == "resolved"
+    assert len(done["orders"][0]["refunds"]) == 1
+    assert done["execution"]["budget"]["tool_calls"] == 8
+
+
+@pytest.mark.parametrize("requirements", [
+    ["staff approval required"],
+    ["approval_needed for 114900 cents", "staff approval for 1 cents"],
+    ["approval_needed for 0 cents"],
+    ["approval required for 1149"],
+    ["approval required for $1,149.00 or $100.00"],
+    ["approval required for $1149.001"],
+    ["approval required for -114900 cents"],
+    ["approval required for -$1149.00"],
+    ["refund of $1149.00"],
+])
+def test_resume_does_not_guess_an_unknown_refund_amount(demo, requirements):
+    demo.post("/api/tickets/T-0039/run", json={"system": "agent"})
+    wait_idle(demo)
+    store = Store(demo.app.state.adapter.root)
+    store.ticket_state("T-0039")["last_result"]["unresolved_requirements"] = requirements
     staff_approve(store, "APR-8013")
     detail = demo.get("/api/tickets/T-0039").json()
     assert detail["execution"]["pending_refund"]["amount_cents"] is None
     assert detail["execution"]["can_resume"] is False
     assert "establish the exact refund order and amount" in detail["execution"]["resume_blocked_reason"]
+
+
+@pytest.mark.parametrize("requirement", [
+    "staff approval for 114900 cents on order O-60001",
+    "staff_approval_for_114900_cents_on_order_O-60001",
+])
+def test_resume_does_not_substitute_an_owned_order_for_a_foreign_requirement(demo, requirement):
+    demo.post("/api/tickets/T-0039/run", json={"system": "agent"})
+    wait_idle(demo)
+    store = Store(demo.app.state.adapter.root)
+    store.ticket_state("T-0039")["last_result"]["unresolved_requirements"] = [requirement]
+    staff_approve(store, "APR-8013")
+    detail = demo.get("/api/tickets/T-0039").json()
+    assert detail["execution"]["pending_refund"] is None
+    assert detail["execution"]["can_resume"] is False
+    assert demo.post("/api/tickets/T-0039/resume").status_code == 400
 
 
 def test_interrupted_refund_has_live_counters_and_can_finish_without_another_refund(tmp_path):
@@ -334,3 +393,130 @@ def test_one_active_run_blocks_competing_actions(tmp_path):
         finally:
             llm.release.set()
             wait_idle(client)
+
+
+@pytest.mark.parametrize('model_calls,tool_calls,ready', [(5, 4, True), (6, 4, False), (4, 5, False)])
+def test_refund_resume_reserves_the_decision_reply_and_check(demo, model_calls, tool_calls, ready):
+    demo.post('/api/tickets/T-0039/run', json={'system': 'agent'})
+    wait_idle(demo)
+    store = Store(demo.app.state.adapter.root)
+    progress = store.data['execution']['T-0039']
+    progress['budget']['model_calls'] = model_calls
+    progress['budget']['tool_calls'] = tool_calls
+    staff_approve(store, 'APR-8013')
+    detail = demo.get('/api/tickets/T-0039').json()
+    assert detail['execution']['can_resume'] is ready
+    if not ready:
+        before = store.path.read_bytes()
+        assert 'Not enough remaining run budget' in detail['execution']['resume_blocked_reason']
+        assert demo.post('/api/tickets/T-0039/resume').status_code == 400
+        assert store.path.read_bytes() == before
+
+
+def _demo_policy_search(*ids):
+    def search(query, k):
+        result = retriever(query, k)
+        result['passages'] = [dict(result['passages'][0], policy_id=pid, title=pid) for pid in ids[:k]]
+        return result
+    return search
+
+
+@pytest.mark.parametrize('ticket_id,category,status,policy_ids,requirements,reason', [
+    ('T-0052', 'delivery', 'resolved', ['POL-SHIP-01'], [], 'done'),
+    ('T-0055', 'returns_refunds', 'awaiting_customer', ['POL-SEC-01', 'POL-RET-01'],
+     ['customer ships the return'], 'return_required'),
+    ('T-0059', 'delivery', 'escalated', ['POL-FRD-01', 'POL-SHIP-03'],
+     ['staff fraud review'], 'fraud_review'),
+    ('T-0064', 'returns_refunds', 'awaiting_customer', ['POL-RET-01'],
+     ['customer ships the return'], 'return_required'),
+    ('T-0146', 'returns_refunds', 'awaiting_approval', ['POL-SEC-01', 'POL-RET-02'],
+     ['staff_approval_for_24999_cents_on_order_O-60109'], 'awaiting_approval'),
+])
+def test_demo_tickets_run_through_real_api_and_guards(tmp_path, ticket_id, category, status,
+                                                     policy_ids, requirements, reason):
+    """Script only model decisions; keep routing, permissions, faults, receipts and UI reads real."""
+    replies = {
+        'T-0052': 'Your order is in transit.',
+        'T-0055': 'Please send the item back through the store return process.',
+        'T-0059': 'This delivery claim needs staff review.',
+        'T-0064': 'Please return the item through the store return process.',
+        'T-0146': 'Your return was received. A recorded staff approval is still required.',
+    }
+    llm = ScriptedLLM(Classification(category=Category(category), summary='support request'),
+                      step('kb_lookup', query='policy for this support request'),
+                      finish(status, replies[ticket_id], policy_ids, requirements, reason), OK)
+    adapter = RealAdapter(runtime=tmp_path, llm_factory=lambda: llm,
+                          retriever_factory=lambda: _demo_policy_search(*policy_ids))
+    with TestClient(create_app(adapter=adapter)) as client:
+        assert client.post(f'/api/tickets/{ticket_id}/run', json={'system': 'agent'}).status_code == 202
+        done = wait_idle(client, ticket_id)
+        assert done['state']['status'] == status
+        trace = client.get(f'/api/tickets/{ticket_id}/trace').json()
+        assert trace[-1]['event'] == 'run_finished'
+        assert client.get(f'/api/tickets/{ticket_id}/expected').json()['grading']['state'] == 'passed'
+        assert done['execution']['can_run'] is False
+        assert client.get('/api/health').json()['running'] is False
+        assert not [e for e in trace if e['event'] == 'tool_request' and e.get('tool') == 'process_refund']
+        if ticket_id == 'T-0052':
+            assert len(done['sent_messages']) == 1
+            replies = [e for e in trace if e['event'] == 'tool_result' and e.get('tool') == 'send_message']
+            assert replies[0]['error']['code'] == 'TIMEOUT'
+            assert replies[-1]['retry'] is True and replies[-1]['result']['replayed'] is True
+        if ticket_id == 'T-0059':
+            assert done['state']['team'] == 'Human Review'
+        if ticket_id == 'T-0146':
+            assert done['execution']['pending_refund']['amount_cents'] == 24999
+            assert done['execution']['can_resume'] is False
+            assert 'No active, unused staff approval' in done['execution']['resume_blocked_reason']
+        if status == 'awaiting_customer':
+            assert 'Waiting for the customer' in done['execution']['resume_blocked_reason']
+
+
+def test_contradictory_approval_demo_refuses_then_escalates_in_api(tmp_path):
+    llm = ScriptedLLM(Classification(category=Category.RETURNS_REFUNDS, summary='refund request'),
+                      step('kb_lookup', query='refund approval mismatch policy'),
+                      step('process_refund', order_id='O-60059', cents=16450, approval_id='APR-8020'),
+                      finish('escalated', 'The approval conflicts with the order and needs staff review.',
+                             ['POL-RET-02'], ['staff reconcile approval'], 'approval_mismatch'), OK)
+    adapter = RealAdapter(runtime=tmp_path, llm_factory=lambda: llm,
+                          retriever_factory=lambda: _demo_policy_search('POL-RET-02'))
+    with TestClient(create_app(adapter=adapter)) as client:
+        client.post('/api/tickets/T-0110/run', json={'system': 'agent'})
+        done = wait_idle(client, 'T-0110')
+        assert done['state']['status'] == 'escalated'
+        assert done['orders'][0]['refunds'] == []
+        trace = client.get('/api/tickets/T-0110/trace').json()
+        refused = next(e for e in trace if e['event'] == 'tool_result' and e.get('tool') == 'process_refund')
+        assert refused['ok'] is False and refused['error']['code'] == 'APPROVAL_CONFLICT'
+        # A correct final escalation does not hide the earlier forbidden attempt.
+        grade = client.get('/api/tickets/T-0110/expected').json()['grading']
+        assert grade['state'] == 'failed'
+        assert next(c for c in grade['checks'] if c['key'] == 'forbidden_actions')['passed'] is False
+
+
+def test_retrieval_fallback_demo_does_not_poison_the_next_ticket(tmp_path):
+    import numpy as np
+    from agent.retrieval import Retriever
+    search = Retriever(embed_fn=lambda texts: [[1., 0.] for _ in texts], cache_path=tmp_path / 'index.json')
+    llm = ScriptedLLM(
+        Classification(category=Category.PRODUCT_INQUIRY, summary='shipping options'),
+        step('kb_lookup', query='shipping Hawaii surcharge delivery options'),
+        finish('resolved', 'Standard shipping is available to Hawaii with an additional surcharge.', ['POL-SHIP-02']), OK,
+        Classification(category=Category.DELIVERY, summary='shipment tracking'),
+        step('kb_lookup', query='shipment tracking'),
+        finish('resolved', 'Your order is in transit.', ['POL-SHIP-01']), OK)
+    adapter = RealAdapter(runtime=tmp_path, llm_factory=lambda: llm, retriever_factory=lambda: search)
+    with TestClient(create_app(adapter=adapter)) as client:
+        client.post('/api/tickets/T-0002/run', json={'system': 'agent'})
+        assert wait_idle(client, 'T-0002')['state']['status'] == 'resolved'
+        trace = client.get('/api/tickets/T-0002/trace').json()
+        found = next(e['result'] for e in trace if e['event'] == 'tool_result' and e.get('tool') == 'kb_lookup')
+        assert found['method'] == 'bm25' and found['fallback_reason']
+        # Keep real embeddings/fault handling, but rank the tracking policy first for this deterministic test.
+        search.embeddings.scores = lambda query: np.array(
+            [1. if chunk.policy_id == 'POL-SHIP-01' else 0. for chunk in search.chunks])
+        client.post('/api/tickets/T-0052/run', json={'system': 'agent'})
+        assert wait_idle(client, 'T-0052')['state']['status'] == 'resolved'
+        trace = client.get('/api/tickets/T-0052/trace').json()
+        found = next(e['result'] for e in trace if e['event'] == 'tool_result' and e.get('tool') == 'kb_lookup')
+        assert found['method'] == 'embeddings' and found['fallback_reason'] is None

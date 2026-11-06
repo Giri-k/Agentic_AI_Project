@@ -8,6 +8,7 @@ really wrote. Money and email are still simulated: refunds and replies only exis
 import json
 import re
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 from threading import RLock, Thread
 from typing import Any
@@ -33,7 +34,10 @@ from .grading import expected_outcome
 
 LIMITS = {"model_calls": MAX_MODEL_CALLS, "tool_calls": MAX_TOOL_CALLS, "retries": MAX_RETRIES,
           "schema_repairs": MAX_SCHEMA_REPAIRS, "revisions": MAX_REVISIONS}
-APPROVAL_NEEDED = re.compile(r"staff approval for (\d+) cents", re.I)
+APPROVAL_NEEDED = re.compile(r"\bapproval(?:_needed)?\b", re.I)
+APPROVAL_CENTS = re.compile(r"(?<![\w.,+\-])(\d+(?:,\d{3})*)\s*cents\b", re.I)
+APPROVAL_DOLLARS = re.compile(
+    r"(?<![\w+\-])(?:\$\s*|USD\s+)((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)(?!\d|[.,]\d)", re.I)
 NO_RETRIEVAL = {"measured": False, "queries": 0, "methods": [],
                 "provenance": "No retrieval measurement yet: run python -m agent.eval_retrieval --save."}
 
@@ -213,13 +217,25 @@ class RealAdapter:
             return None
         ticket = store.tickets[ticket_id]
         requirements = (store.ticket_state(ticket_id).get("last_result") or {}).get("unresolved_requirements", [])
-        match = next((APPROVAL_NEEDED.search(r) for r in requirements if APPROVAL_NEEDED.search(r)), None)
-        cents = int(match.group(1)) if match else None
+        # The model sometimes writes machine-style requirements such as
+        # staff_approval_for_114900_cents. Normalize separators, not amounts or IDs.
+        normalized_requirements = [r.replace("_", " ") for r in requirements]
+        approval_requirements = [r for r in normalized_requirements if APPROVAL_NEEDED.search(r)]
+        amounts = {int(match.group(1).replace(",", "")) for requirement in approval_requirements
+                   for match in APPROVAL_CENTS.finditer(requirement)}
+        amounts.update(int(Decimal(match.group(1).replace(",", "")) * 100)
+                       for requirement in approval_requirements for match in APPROVAL_DOLLARS.finditer(requirement))
+        # Model wording can vary, but conflicting or missing amounts must never be guessed.
+        cents = amounts.pop() if len(amounts) == 1 else None
+        if cents is not None and cents <= 0:
+            cents = None
         owned = [oid for oid in ticket["order_ids"]
                  if store.order(oid) and store.order(oid)["customer_id"] == ticket["customer_id"]]
         if not owned:
             return None
-        mentioned = set(re.findall(r"\bO-\d+\b", " ".join(requirements))) & set(owned)
+        mentioned = set(re.findall(r"\bO-\d+\b", " ".join(normalized_requirements)))
+        if mentioned - set(owned):
+            return None  # An explicit foreign order must not silently become the ticket's owned order.
         if len(mentioned) == 1:
             order_id = mentioned.pop()
         elif len(owned) == 1:
@@ -246,6 +262,7 @@ class RealAdapter:
         if status == "awaiting_customer":
             return "Waiting for the customer to reply; customer replies are not simulated in this console."
         minimum_tools = 3  # re-read current records, send a reply, save the outcome
+        minimum_models = 2 if last.get("system") == "agent" else 1  # final decision and reply check
         if status == "awaiting_approval":
             pending = self._pending_refund(store, ticket_id)
             if pending is None or pending["amount_cents"] is None:
@@ -261,12 +278,13 @@ class RealAdapter:
             if not usable and not committed:
                 return "No active, unused staff approval for this exact order and amount yet. Approve it on the Approvals page."
             minimum_tools += (0 if committed else 1) + (1 if last.get("system") == "baseline" else 0)
+            if last.get("system") == "agent" and not committed:
+                minimum_models += 1  # choose the refund before choosing and checking the final reply
         if last.get("system") == "baseline" and load_progress(store, ticket_id, "baseline") is None:
             return "This older baseline run has no saved lifetime budget; it needs staff recovery."
         budget = self._budget(store, ticket_id, last)
-        minimum_models = 2 if last.get("system") == "agent" else 1
         if MAX_MODEL_CALLS - budget["model_calls"] < minimum_models or MAX_TOOL_CALLS - budget["tool_calls"] < minimum_tools:
-            return "This ticket's run budget is used up; it needs staff recovery."
+            return "Not enough remaining run budget to finish safely; staff recovery is required."
         return None
 
     def _execution_view(self, store: Store, ticket_id: str) -> dict[str, Any]:
